@@ -10,6 +10,7 @@ class TaskBase(BaseModel):
     due_date: date | None = None
     priority: str = "Medium"
     status: str = "Pending"
+    exam_id: int | None = None
 
 
 class TaskCreate(TaskBase):
@@ -23,6 +24,7 @@ class TaskUpdate(BaseModel):
     due_date: date | None = None
     priority: str | None = None
     status: str | None = None
+    exam_id: int | None = None
 
 
 class TaskResponse(TaskBase):

@@ -32,6 +32,13 @@ class Task(Base):
         nullable=True,
     )
 
+    exam_id = Column(
+        Integer,
+        ForeignKey("exams.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     due_date = Column(
         Date,
         nullable=True,
@@ -57,5 +64,10 @@ class Task(Base):
 
     subject = relationship(
         "Subject",
+        back_populates="tasks",
+    )
+
+    exam = relationship(
+        "Exam",
         back_populates="tasks",
     )

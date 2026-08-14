@@ -24,6 +24,8 @@ interface Subject {
 
 interface Task {
     id: number;
+    subject_id?: number;
+    exam_id?: number | null;
     title?: string;
     name?: string;
     status?: string;
@@ -106,11 +108,14 @@ export default function ExamDetailPage() {
             if (tasksResponse.ok) {
                 const taskData = await tasksResponse.json();
 
+                /*
+                 * Tasks are now associated with the specific exam.
+                 * We only show tasks belonging to this exam.
+                 */
                 setTasks(
                     taskData.filter(
                         (task: Task) =>
-                            task.subject_id ===
-                            examData.subject_id
+                            task.exam_id === examData.id
                     )
                 );
             }
@@ -119,6 +124,10 @@ export default function ExamDetailPage() {
                 const sessionData =
                     await sessionsResponse.json();
 
+                /*
+                 * Study sessions currently belong to subjects,
+                 * so we continue filtering them by subject.
+                 */
                 setSessions(
                     sessionData.filter(
                         (session: StudySession) =>
@@ -255,6 +264,7 @@ export default function ExamDetailPage() {
 
                         <p className="mt-2 text-sm text-slate-500">
                             {formatDate(exam.exam_date)}
+
                             {exam.exam_type
                                 ? ` · ${exam.exam_type}`
                                 : ""}
@@ -273,6 +283,7 @@ export default function ExamDetailPage() {
                     <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
 
                         <div>
+
                             <p className="text-sm text-slate-300">
                                 Time remaining
                             </p>
@@ -286,12 +297,13 @@ export default function ExamDetailPage() {
                                             ? "1 day"
                                             : `${daysRemaining} days`}
                             </p>
+
                         </div>
 
                         <div className="flex gap-3">
 
                             <Link
-                                href={`/tasks?subject=${exam.subject_id}`}
+                                href={`/tasks?subject=${exam.subject_id}&exam=${exam.id}`}
                                 className="rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium hover:bg-white/20"
                             >
                                 Add task
@@ -341,17 +353,19 @@ export default function ExamDetailPage() {
                         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
 
                             <div>
+
                                 <h2 className="font-semibold">
                                     Study tasks
                                 </h2>
 
                                 <p className="mt-1 text-xs text-slate-500">
-                                    Tasks related to {subject?.name}
+                                    Tasks for this examination
                                 </p>
+
                             </div>
 
                             <Link
-                                href={`/tasks?subject=${exam.subject_id}`}
+                                href={`/tasks?subject=${exam.subject_id}&exam=${exam.id}`}
                                 className="text-sm font-medium text-indigo-600"
                             >
                                 Add
@@ -427,6 +441,7 @@ export default function ExamDetailPage() {
                         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
 
                             <div>
+
                                 <h2 className="font-semibold">
                                     Recent study
                                 </h2>
@@ -434,6 +449,7 @@ export default function ExamDetailPage() {
                                 <p className="mt-1 text-xs text-slate-500">
                                     Your latest preparation
                                 </p>
+
                             </div>
 
                             <Link

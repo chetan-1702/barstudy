@@ -1,55 +1,125 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
-import {
-    createTask,
-    deleteTask,
-    getTasks,
-    updateTask,
-    type Task,
-} from "../../src/services/tasks";
+const API_URL = "http://localhost:8000";
 
-import {
-    getSubjects,
-    type Subject,
-} from "../../src/services/subjects";
+interface Subject {
+    id: number;
+    name: string;
+    code: string | null;
+    description?: string | null;
+}
+
+interface Exam {
+    id: number;
+    subject_id: number;
+    name: string;
+    exam_date: string;
+    exam_type: string | null;
+}
+
+interface Task {
+    id: number;
+    subject_id: number;
+    exam_id: number | null;
+    title: string;
+    description: string | null;
+    due_date: string | null;
+    priority: string;
+    status: string;
+    created_at: string;
+}
 
 export default function TasksPage() {
-    const [tasks, setTasks] = useState<Task[]>([]);
-    const [subjects, setSubjects] = useState<Subject[]>([]);
+    const searchParams = useSearchParams();
 
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [showForm, setShowForm] = useState(false);
+    const subjectFromUrl = searchParams.get("subject");
+    const examFromUrl = searchParams.get("exam");
+
+    const [subjects, setSubjects] = useState<Subject[]>([]);
+    const [exams, setExams] = useState<Exam[]>([]);
+    const [tasks, setTasks] = useState<Task[]>([]);
+
+    const [selectedSubject, setSelectedSubject] =
+        useState(subjectFromUrl || "");
+
+    const [selectedExam, setSelectedExam] =
+        useState(examFromUrl || "");
 
     const [title, setTitle] = useState("");
-    const [subjectId, setSubjectId] = useState("");
     const [description, setDescription] = useState("");
     const [dueDate, setDueDate] = useState("");
     const [priority, setPriority] = useState("Medium");
+
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState("");
+    const [success, setSuccess] = useState("");
 
     useEffect(() => {
         loadData();
     }, []);
 
+    useEffect(() => {
+        if (subjectFromUrl) {
+            setSelectedSubject(subjectFromUrl);
+        }
+
+        if (examFromUrl) {
+            setSelectedExam(examFromUrl);
+        }
+    }, [subjectFromUrl, examFromUrl]);
+
     async function loadData() {
         try {
             setLoading(true);
-            setError(null);
+            setError("");
 
-            const [taskData, subjectData] = await Promise.all([
-                getTasks(),
-                getSubjects(),
+            const [
+                subjectsResponse,
+                examsResponse,
+                tasksResponse,
+            ] = await Promise.all([
+                fetch(`${API_URL}/api/subjects`, {
+                    cache: "no-store",
+                }),
+
+                fetch(`${API_URL}/api/exams`, {
+                    cache: "no-store",
+                }),
+
+                fetch(`${API_URL}/api/tasks`, {
+                    cache: "no-store",
+                }),
             ]);
 
-            setTasks(taskData);
-            setSubjects(subjectData);
-
-            if (subjectData.length > 0) {
-                setSubjectId(String(subjectData[0].id));
+            if (!subjectsResponse.ok) {
+                throw new Error("Failed to load subjects");
             }
+
+            if (!examsResponse.ok) {
+                throw new Error("Failed to load exams");
+            }
+
+            if (!tasksResponse.ok) {
+                throw new Error("Failed to load tasks");
+            }
+
+            const subjectData =
+                await subjectsResponse.json();
+
+            const examData =
+                await examsResponse.json();
+
+            const taskData =
+                await tasksResponse.json();
+
+            setSubjects(subjectData);
+            setExams(examData);
+            setTasks(taskData);
         } catch (err) {
             console.error(err);
             setError("Unable to load tasks.");
@@ -58,55 +128,103 @@ export default function TasksPage() {
         }
     }
 
-    async function handleAddTask(
-        event: React.FormEvent<HTMLFormElement>
-    ) {
+    async function createTask(event: FormEvent) {
         event.preventDefault();
 
-        if (!title.trim() || !subjectId) {
-            setError("Please provide a subject and task title.");
+        if (!selectedSubject) {
+            setError("Please select a subject.");
+            return;
+        }
+
+        if (!title.trim()) {
+            setError("Please enter a task title.");
             return;
         }
 
         try {
-            setError(null);
+            setSaving(true);
+            setError("");
+            setSuccess("");
 
-            const newTask = await createTask({
-                subject_id: Number(subjectId),
-                title: title.trim(),
-                description: description.trim() || undefined,
-                due_date: dueDate || undefined,
-                priority,
-                status: "Pending",
-            });
-
-            setTasks((current) =>
-                [...current, newTask].sort(sortTasks)
+            const response = await fetch(
+                `${API_URL}/api/tasks`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        subject_id: Number(selectedSubject),
+                        exam_id: selectedExam
+                            ? Number(selectedExam)
+                            : null,
+                        title: title.trim(),
+                        description:
+                            description.trim() || null,
+                        due_date: dueDate || null,
+                        priority,
+                        status: "Pending",
+                    }),
+                }
             );
+
+            if (!response.ok) {
+                const message = await response.text();
+                console.error(message);
+
+                throw new Error("Failed to create task");
+            }
+
+            const newTask: Task =
+                await response.json();
+
+            setTasks((current) => [
+                newTask,
+                ...current,
+            ]);
 
             setTitle("");
             setDescription("");
             setDueDate("");
             setPriority("Medium");
-            setShowForm(false);
+
+            setSuccess("Task created successfully.");
         } catch (err) {
             console.error(err);
             setError("Unable to create task.");
+        } finally {
+            setSaving(false);
         }
     }
 
-    async function handleToggleTask(task: Task) {
+    async function updateTaskStatus(
+        task: Task
+    ) {
         const newStatus =
             task.status === "Completed"
                 ? "Pending"
                 : "Completed";
 
         try {
-            setError(null);
+            const response = await fetch(
+                `${API_URL}/api/tasks/${task.id}`,
+                {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        status: newStatus,
+                    }),
+                }
+            );
 
-            const updatedTask = await updateTask(task.id, {
-                status: newStatus,
-            });
+            if (!response.ok) {
+                throw new Error("Failed to update task");
+            }
+
+            const updatedTask: Task =
+                await response.json();
 
             setTasks((current) =>
                 current.map((item) =>
@@ -121,25 +239,6 @@ export default function TasksPage() {
         }
     }
 
-    async function handleDeleteTask(id: number) {
-        if (!window.confirm("Delete this task?")) {
-            return;
-        }
-
-        try {
-            setError(null);
-
-            await deleteTask(id);
-
-            setTasks((current) =>
-                current.filter((task) => task.id !== id)
-            );
-        } catch (err) {
-            console.error(err);
-            setError("Unable to delete task.");
-        }
-    }
-
     function getSubjectName(subjectId: number) {
         return (
             subjects.find(
@@ -148,506 +247,478 @@ export default function TasksPage() {
         );
     }
 
-    function formatDate(date: string | null) {
-        if (!date) {
-            return "No due date";
+    function getExamName(
+        examId: number | null
+    ) {
+        if (!examId) {
+            return null;
         }
 
-        return new Date(date).toLocaleDateString("en-GB", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-        });
-    }
-
-    function sortTasks(a: Task, b: Task) {
-        if (!a.due_date) return 1;
-        if (!b.due_date) return -1;
-
         return (
-            new Date(a.due_date).getTime() -
-            new Date(b.due_date).getTime()
+            exams.find(
+                (exam) => exam.id === examId
+            )?.name || "Unknown exam"
         );
     }
 
-    const pendingTasks = tasks.filter(
-        (task) => task.status !== "Completed"
-    );
+    const filteredExams = selectedSubject
+        ? exams.filter(
+            (exam) =>
+                exam.subject_id ===
+                Number(selectedSubject)
+        )
+        : exams;
 
-    const completedTasks = tasks.filter(
-        (task) => task.status === "Completed"
-    );
+    const visibleTasks = selectedExam
+        ? tasks.filter(
+            (task) =>
+                task.exam_id ===
+                Number(selectedExam)
+        )
+        : selectedSubject
+            ? tasks.filter(
+                (task) =>
+                    task.subject_id ===
+                    Number(selectedSubject)
+            )
+            : tasks;
 
     return (
-        <main className="min-h-screen bg-[#f6f7fb] text-slate-900">
-            <div className="flex min-h-screen">
+        <main className="min-h-screen bg-[#f6f7fb]">
 
-                {/* Sidebar */}
-                <aside className="hidden w-64 flex-col bg-[#171b3a] text-white md:flex">
-                    <div className="border-b border-white/10 px-6 py-6">
-                        <Link
-                            href="/"
-                            className="flex items-center gap-3"
-                        >
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg font-bold text-[#171b3a]">
-                                B
-                            </div>
+            {/* Header */}
+            <header className="border-b border-slate-200 bg-white">
+                <div className="mx-auto max-w-6xl px-6 py-6">
 
-                            <div>
-                                <h1 className="text-lg font-semibold">
-                                    BarStudy
-                                </h1>
+                    <Link
+                        href="/"
+                        className="text-sm text-slate-500 hover:text-slate-900"
+                    >
+                        ← Dashboard
+                    </Link>
 
-                                <p className="text-xs text-slate-400">
-                                    Bar Course Hub
-                                </p>
-                            </div>
-                        </Link>
-                    </div>
+                    <div className="mt-5">
 
-                    <nav className="flex-1 px-4 py-6">
-                        <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-                            Workspace
+                        <h1 className="text-3xl font-bold tracking-tight">
+                            Tasks
+                        </h1>
+
+                        <p className="mt-2 text-sm text-slate-500">
+                            Manage your study tasks and preparation.
                         </p>
 
-                        <div className="space-y-1">
-                            <NavItem href="/" label="Dashboard" icon="⌂" />
-                            <NavItem
-                                href="/subjects"
-                                label="Subjects"
-                                icon="▤"
-                            />
-                            <NavItem
-                                href="/exams"
-                                label="Exams"
-                                icon="□"
-                            />
-                            <NavItem
-                                href="/study"
-                                label="Study Planner"
-                                icon="◷"
-                            />
-                            <NavItem
-                                href="/tasks"
-                                label="Tasks"
-                                icon="✓"
-                                active
-                            />
-                            <NavItem
-                                href="/resources"
-                                label="Resources"
-                                icon="▱"
-                            />
-                            <NavItem
-                                href="/inn"
-                                label="Inn of Court"
-                                icon="⚖"
-                            />
-                        </div>
-                    </nav>
-
-                    <div className="border-t border-white/10 p-4">
-                        <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-500 text-sm font-semibold">
-                                C
-                            </div>
-
-                            <div className="min-w-0">
-                                <p className="truncate text-sm font-medium">
-                                    Chetan
-                                </p>
-
-                                <p className="truncate text-xs text-slate-500">
-                                    Bar Course Student
-                                </p>
-                            </div>
-                        </div>
                     </div>
-                </aside>
 
-                {/* Main */}
-                <section className="flex-1">
+                </div>
+            </header>
 
-                    <header className="flex h-20 items-center justify-between border-b border-slate-200 bg-white px-6 lg:px-10">
-                        <div>
-                            <p className="text-sm text-slate-500">
-                                Study management
-                            </p>
+            <div className="mx-auto max-w-6xl px-6 py-8">
 
-                            <h2 className="text-xl font-semibold">
-                                Tasks
-                            </h2>
-                        </div>
+                {/* Context banner */}
+                {examFromUrl && selectedExam && (
+                    <div className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50 px-5 py-4">
 
-                        <button
-                            onClick={() =>
-                                setShowForm((current) => !current)
-                            }
-                            className="rounded-xl bg-[#171b3a] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#222750]"
+                        <p className="text-xs font-medium uppercase tracking-wide text-indigo-600">
+                            Adding task for exam
+                        </p>
+
+                        <p className="mt-1 font-semibold text-slate-800">
+                            {getExamName(
+                                Number(selectedExam)
+                            )}
+                        </p>
+
+                    </div>
+                )}
+
+                {/* Messages */}
+                {error && (
+                    <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                        <p className="text-sm text-red-600">
+                            {error}
+                        </p>
+                    </div>
+                )}
+
+                {success && (
+                    <div className="mb-5 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+                        <p className="text-sm text-green-700">
+                            {success}
+                        </p>
+                    </div>
+                )}
+
+                <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
+
+                    {/* Create task */}
+                    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+
+                        <h2 className="font-semibold">
+                            Add task
+                        </h2>
+
+                        <p className="mt-1 text-xs text-slate-500">
+                            Create a task for your study plan.
+                        </p>
+
+                        <form
+                            onSubmit={createTask}
+                            className="mt-6 space-y-4"
                         >
-                            {showForm ? "Cancel" : "+ Add task"}
-                        </button>
-                    </header>
 
-                    <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
+                            {/* Subject */}
+                            <div>
 
-                        <div className="mb-8">
-                            <p className="text-sm font-medium text-indigo-600">
-                                Study workload
-                            </p>
+                                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                                    Subject
+                                </label>
 
-                            <h1 className="mt-1 text-3xl font-bold tracking-tight">
-                                Your tasks
-                            </h1>
+                                <select
+                                    value={selectedSubject}
+                                    onChange={(event) => {
+                                        setSelectedSubject(
+                                            event.target.value
+                                        );
 
-                            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                                Keep track of readings, practice questions,
-                                revision and other work for your course.
-                            </p>
-                        </div>
-
-                        {error && (
-                            <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4">
-                                <p className="text-sm text-red-600">
-                                    {error}
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Add form */}
-                        {showForm && (
-                            <form
-                                onSubmit={handleAddTask}
-                                className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-                            >
-                                <h2 className="text-lg font-semibold">
-                                    Add a task
-                                </h2>
-
-                                <div className="mt-5 grid gap-5 md:grid-cols-2">
-
-                                    <div>
-                                        <label className="text-sm font-medium text-slate-700">
-                                            Subject
-                                        </label>
-
-                                        <select
-                                            value={subjectId}
-                                            onChange={(e) =>
-                                                setSubjectId(e.target.value)
-                                            }
-                                            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
-                                        >
-                                            {subjects.map((subject) => (
-                                                <option
-                                                    key={subject.id}
-                                                    value={subject.id}
-                                                >
-                                                    {subject.name}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="text-sm font-medium text-slate-700">
-                                            Task
-                                        </label>
-
-                                        <input
-                                            value={title}
-                                            onChange={(e) =>
-                                                setTitle(e.target.value)
-                                            }
-                                            placeholder="Read chapter on homicide"
-                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-sm font-medium text-slate-700">
-                                            Due date
-                                        </label>
-
-                                        <input
-                                            type="date"
-                                            value={dueDate}
-                                            onChange={(e) =>
-                                                setDueDate(e.target.value)
-                                            }
-                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-sm font-medium text-slate-700">
-                                            Priority
-                                        </label>
-
-                                        <select
-                                            value={priority}
-                                            onChange={(e) =>
-                                                setPriority(e.target.value)
-                                            }
-                                            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
-                                        >
-                                            <option value="Low">Low</option>
-                                            <option value="Medium">
-                                                Medium
-                                            </option>
-                                            <option value="High">High</option>
-                                        </select>
-                                    </div>
-
-                                    <div className="md:col-span-2">
-                                        <label className="text-sm font-medium text-slate-700">
-                                            Description
-                                        </label>
-
-                                        <textarea
-                                            value={description}
-                                            onChange={(e) =>
-                                                setDescription(e.target.value)
-                                            }
-                                            rows={3}
-                                            placeholder="Optional details..."
-                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="mt-5 flex justify-end">
-                                    <button
-                                        type="submit"
-                                        className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700"
-                                    >
-                                        Save task
-                                    </button>
-                                </div>
-                            </form>
-                        )}
-
-                        {loading ? (
-                            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
-                                <p className="text-sm text-slate-500">
-                                    Loading tasks...
-                                </p>
-                            </div>
-                        ) : tasks.length === 0 ? (
-                            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-                                <h2 className="font-semibold">
-                                    No tasks yet
-                                </h2>
-
-                                <p className="mt-2 text-sm text-slate-500">
-                                    Add your first study task to get started.
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="space-y-8">
-
-                                {/* Pending */}
-                                <TaskSection
-                                    title="To do"
-                                    count={pendingTasks.length}
+                                        /*
+                                         * Changing subject invalidates
+                                         * the currently selected exam.
+                                         */
+                                        setSelectedExam("");
+                                    }}
+                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-500"
+                                    required
                                 >
-                                    {pendingTasks.map((task) => (
-                                        <TaskCard
-                                            key={task.id}
-                                            task={task}
-                                            subjectName={getSubjectName(
-                                                task.subject_id
-                                            )}
-                                            onToggle={handleToggleTask}
-                                            onDelete={handleDeleteTask}
-                                            formatDate={formatDate}
-                                        />
-                                    ))}
-                                </TaskSection>
+                                    <option value="">
+                                        Select subject
+                                    </option>
 
-                                {/* Completed */}
-                                {completedTasks.length > 0 && (
-                                    <TaskSection
-                                        title="Completed"
-                                        count={completedTasks.length}
+                                    {subjects.map((subject) => (
+                                        <option
+                                            key={subject.id}
+                                            value={subject.id}
+                                        >
+                                            {subject.name}
+                                        </option>
+                                    ))}
+                                </select>
+
+                            </div>
+
+                            {/* Exam */}
+                            <div>
+
+                                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                                    Exam
+                                </label>
+
+                                <select
+                                    value={selectedExam}
+                                    onChange={(event) =>
+                                        setSelectedExam(
+                                            event.target.value
+                                        )
+                                    }
+                                    disabled={!selectedSubject}
+                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 focus:border-indigo-500"
+                                >
+                                    <option value="">
+                                        No specific exam
+                                    </option>
+
+                                    {filteredExams.map((exam) => (
+                                        <option
+                                            key={exam.id}
+                                            value={exam.id}
+                                        >
+                                            {exam.name}
+                                        </option>
+                                    ))}
+                                </select>
+
+                                <p className="mt-1.5 text-xs text-slate-400">
+                                    Optionally associate this task
+                                    with an examination.
+                                </p>
+
+                            </div>
+
+                            {/* Title */}
+                            <div>
+
+                                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                                    Task
+                                </label>
+
+                                <input
+                                    type="text"
+                                    value={title}
+                                    onChange={(event) =>
+                                        setTitle(event.target.value)
+                                    }
+                                    placeholder="e.g. Review mens rea"
+                                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-500"
+                                    required
+                                />
+
+                            </div>
+
+                            {/* Description */}
+                            <div>
+
+                                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                                    Description
+                                </label>
+
+                                <textarea
+                                    value={description}
+                                    onChange={(event) =>
+                                        setDescription(
+                                            event.target.value
+                                        )
+                                    }
+                                    placeholder="Optional details..."
+                                    rows={3}
+                                    className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-500"
+                                />
+
+                            </div>
+
+                            {/* Due date */}
+                            <div>
+
+                                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                                    Due date
+                                </label>
+
+                                <input
+                                    type="date"
+                                    value={dueDate}
+                                    onChange={(event) =>
+                                        setDueDate(
+                                            event.target.value
+                                        )
+                                    }
+                                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-500"
+                                />
+
+                            </div>
+
+                            {/* Priority */}
+                            <div>
+
+                                <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                                    Priority
+                                </label>
+
+                                <select
+                                    value={priority}
+                                    onChange={(event) =>
+                                        setPriority(
+                                            event.target.value
+                                        )
+                                    }
+                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-500"
+                                >
+                                    <option value="Low">
+                                        Low
+                                    </option>
+
+                                    <option value="Medium">
+                                        Medium
+                                    </option>
+
+                                    <option value="High">
+                                        High
+                                    </option>
+                                </select>
+
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={saving || loading}
+                                className="w-full rounded-xl bg-[#171b3a] px-4 py-3 text-sm font-medium text-white hover:bg-[#222750] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {saving
+                                    ? "Creating..."
+                                    : "Create task"}
+                            </button>
+
+                        </form>
+
+                    </section>
+
+                    {/* Task list */}
+                    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+
+                        <div className="border-b border-slate-100 px-6 py-5">
+
+                            <div className="flex items-center justify-between">
+
+                                <div>
+
+                                    <h2 className="font-semibold">
+                                        {selectedExam
+                                            ? "Exam tasks"
+                                            : selectedSubject
+                                                ? "Subject tasks"
+                                                : "All tasks"}
+                                    </h2>
+
+                                    <p className="mt-1 text-xs text-slate-500">
+                                        {visibleTasks.length}{" "}
+                                        {visibleTasks.length === 1
+                                            ? "task"
+                                            : "tasks"}
+                                    </p>
+
+                                </div>
+
+                                {selectedExam && (
+                                    <Link
+                                        href={`/exams/${selectedExam}`}
+                                        className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
                                     >
-                                        {completedTasks.map((task) => (
-                                            <TaskCard
-                                                key={task.id}
-                                                task={task}
-                                                subjectName={getSubjectName(
-                                                    task.subject_id
-                                                )}
-                                                onToggle={handleToggleTask}
-                                                onDelete={handleDeleteTask}
-                                                formatDate={formatDate}
-                                            />
-                                        ))}
-                                    </TaskSection>
+                                        View exam
+                                    </Link>
                                 )}
 
                             </div>
+
+                        </div>
+
+                        {loading ? (
+                            <div className="px-6 py-10 text-center">
+
+                                <p className="text-sm text-slate-500">
+                                    Loading tasks...
+                                </p>
+
+                            </div>
+                        ) : visibleTasks.length === 0 ? (
+                            <div className="px-6 py-12 text-center">
+
+                                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+                                    ✓
+                                </div>
+
+                                <p className="mt-4 font-medium">
+                                    No tasks yet
+                                </p>
+
+                                <p className="mt-1 text-sm text-slate-500">
+                                    Create your first study task using
+                                    the form.
+                                </p>
+
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-slate-100">
+
+                                {visibleTasks.map((task) => {
+
+                                    const completed =
+                                        task.status.toLowerCase() ===
+                                        "completed";
+
+                                    return (
+                                        <div
+                                            key={task.id}
+                                            className="flex items-start gap-4 px-6 py-5"
+                                        >
+
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    updateTaskStatus(task)
+                                                }
+                                                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${completed
+                                                    ? "border-indigo-600 bg-indigo-600 text-white"
+                                                    : "border-slate-300 bg-white"
+                                                    }`}
+                                                title={
+                                                    completed
+                                                        ? "Mark as pending"
+                                                        : "Mark as completed"
+                                                }
+                                            >
+                                                {completed && (
+                                                    <span className="text-xs">
+                                                        ✓
+                                                    </span>
+                                                )}
+                                            </button>
+
+                                            <div className="min-w-0 flex-1">
+
+                                                <p
+                                                    className={`text-sm font-medium ${completed
+                                                        ? "text-slate-400 line-through"
+                                                        : "text-slate-800"
+                                                        }`}
+                                                >
+                                                    {task.title}
+                                                </p>
+
+                                                {task.description && (
+                                                    <p className="mt-1 text-sm text-slate-500">
+                                                        {task.description}
+                                                    </p>
+                                                )}
+
+                                                <div className="mt-2 flex flex-wrap gap-2">
+
+                                                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                                                        {getSubjectName(
+                                                            task.subject_id
+                                                        )}
+                                                    </span>
+
+                                                    {task.exam_id && (
+                                                        <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs text-indigo-600">
+                                                            {getExamName(
+                                                                task.exam_id
+                                                            )}
+                                                        </span>
+                                                    )}
+
+                                                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                                                        {task.priority}
+                                                    </span>
+
+                                                    {task.due_date && (
+                                                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                                                            Due{" "}
+                                                            {new Date(
+                                                                `${task.due_date}T00:00:00`
+                                                            ).toLocaleDateString(
+                                                                "en-GB",
+                                                                {
+                                                                    day: "numeric",
+                                                                    month: "short",
+                                                                }
+                                                            )}
+                                                        </span>
+                                                    )}
+
+                                                </div>
+
+                                            </div>
+
+                                        </div>
+                                    );
+                                })}
+
+                            </div>
                         )}
-                    </div>
-                </section>
-            </div>
-        </main>
-    );
-}
 
-function TaskSection({
-    title,
-    count,
-    children,
-}: {
-    title: string;
-    count: number;
-    children: React.ReactNode;
-}) {
-    return (
-        <section>
-            <div className="mb-3 flex items-center gap-3">
-                <h2 className="font-semibold">{title}</h2>
+                    </section>
 
-                <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">
-                    {count}
-                </span>
-            </div>
-
-            <div className="space-y-3">
-                {children}
-            </div>
-        </section>
-    );
-}
-
-function TaskCard({
-    task,
-    subjectName,
-    onToggle,
-    onDelete,
-    formatDate,
-}: {
-    task: Task;
-    subjectName: string;
-    onToggle: (task: Task) => void;
-    onDelete: (id: number) => void;
-    formatDate: (date: string | null) => string;
-}) {
-    const completed = task.status === "Completed";
-
-    return (
-        <article
-            className={`rounded-2xl border bg-white p-5 shadow-sm ${completed
-                ? "border-slate-200 opacity-70"
-                : "border-slate-200"
-                }`}
-        >
-            <div className="flex items-start gap-4">
-
-                <button
-                    onClick={() => onToggle(task)}
-                    className={`mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs ${completed
-                        ? "border-indigo-600 bg-indigo-600 text-white"
-                        : "border-slate-300 text-transparent hover:border-indigo-500"
-                        }`}
-                    aria-label={
-                        completed
-                            ? "Mark task as pending"
-                            : "Mark task as completed"
-                    }
-                >
-                    ✓
-                </button>
-
-                <div className="min-w-0 flex-1">
-
-                    <div className="flex flex-wrap items-center gap-2">
-                        <h3
-                            className={`font-semibold ${completed
-                                ? "text-slate-400 line-through"
-                                : "text-slate-800"
-                                }`}
-                        >
-                            {task.title}
-                        </h3>
-
-                        <PriorityBadge
-                            priority={task.priority}
-                        />
-                    </div>
-
-                    <p className="mt-1 text-xs font-medium text-indigo-600">
-                        {subjectName}
-                    </p>
-
-                    {task.description && (
-                        <p className="mt-2 text-sm leading-6 text-slate-500">
-                            {task.description}
-                        </p>
-                    )}
-
-                    <p className="mt-3 text-xs text-slate-400">
-                        Due: {formatDate(task.due_date)}
-                    </p>
                 </div>
 
-                <button
-                    onClick={() => onDelete(task.id)}
-                    className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-400 hover:bg-red-50 hover:text-red-600"
-                >
-                    Delete
-                </button>
             </div>
-        </article>
-    );
-}
 
-function PriorityBadge({
-    priority,
-}: {
-    priority: string;
-}) {
-    const classes =
-        priority === "High"
-            ? "bg-red-50 text-red-600"
-            : priority === "Low"
-                ? "bg-slate-100 text-slate-500"
-                : "bg-amber-50 text-amber-600";
-
-    return (
-        <span
-            className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${classes}`}
-        >
-            {priority}
-        </span>
-    );
-}
-
-function NavItem({
-    href,
-    label,
-    icon,
-    active = false,
-}: {
-    href: string;
-    label: string;
-    icon: string;
-    active?: boolean;
-}) {
-    return (
-        <Link
-            href={href}
-            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${active
-                ? "bg-white/10 text-white"
-                : "text-slate-400 hover:bg-white/5 hover:text-white"
-                }`}
-        >
-            <span className="flex w-5 justify-center text-base">
-                {icon}
-            </span>
-
-            {label}
-        </Link>
+        </main>
     );
 }

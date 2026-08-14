@@ -50,3 +50,8 @@ class Exam(Base):
         "Subject",
         back_populates="exams",
     )
+
+    tasks = relationship(
+        "Task",
+        back_populates="exam",
+    )
