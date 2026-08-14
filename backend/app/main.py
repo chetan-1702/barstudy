@@ -8,6 +8,7 @@ from backend.app.api.subjects import router as subjects_router
 from backend.app.api.tasks import router as tasks_router
 from backend.app.db.database import Base, engine
 from backend.app.models.user import User
+from backend.app.api.inn import router as inn_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -56,6 +57,7 @@ app.include_router(exams_router)
 app.include_router(tasks_router)
 app.include_router(study_sessions_router)
 app.include_router(resources_router)
+app.include_router(inn_router)
 
 
 @app.get("/")

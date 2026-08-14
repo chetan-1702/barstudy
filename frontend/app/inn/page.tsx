@@ -1,437 +1,541 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
-const inns = [
-    "Gray's Inn",
-    "Lincoln's Inn",
-    "Inner Temple",
-    "Middle Temple",
-];
+const API_URL = "http://localhost:8000";
+
+interface InnProfile {
+    id: number;
+    user_id: number;
+    registered: boolean;
+    inn_name: string | null;
+    application_status: string | null;
+    intended_application_date: string | null;
+    joining_date: string | null;
+    membership_status: string | null;
+    important_dates: string | null;
+    documents: string | null;
+    notes: string | null;
+}
 
 export default function InnPage() {
     const [registered, setRegistered] = useState(false);
-    const [selectedInn, setSelectedInn] = useState("");
-    const [showForm, setShowForm] = useState(false);
+
+    const [innName, setInnName] = useState("");
+    const [applicationStatus, setApplicationStatus] = useState("");
+    const [intendedApplicationDate, setIntendedApplicationDate] =
+        useState("");
+
+    const [joiningDate, setJoiningDate] = useState("");
+    const [membershipStatus, setMembershipStatus] = useState("");
+
+    const [importantDates, setImportantDates] = useState("");
+    const [documents, setDocuments] = useState("");
+    const [notes, setNotes] = useState("");
+
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        loadProfile();
+    }, []);
+
+    async function loadProfile() {
+        try {
+            const response = await fetch(`${API_URL}/api/inn`, {
+                cache: "no-store",
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to load Inn profile");
+            }
+
+            const data: InnProfile | null = await response.json();
+
+            if (data) {
+                setRegistered(data.registered);
+                setInnName(data.inn_name || "");
+                setApplicationStatus(data.application_status || "");
+                setIntendedApplicationDate(
+                    data.intended_application_date || ""
+                );
+                setJoiningDate(data.joining_date || "");
+                setMembershipStatus(data.membership_status || "");
+                setImportantDates(data.important_dates || "");
+                setDocuments(data.documents || "");
+                setNotes(data.notes || "");
+            }
+        } catch (err) {
+            console.error(err);
+            setError("Unable to load your Inn information.");
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function saveProfile() {
+        try {
+            setSaving(true);
+            setSaved(false);
+            setError("");
+
+            const response = await fetch(`${API_URL}/api/inn`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    registered,
+
+                    inn_name: innName || null,
+
+                    application_status: registered
+                        ? null
+                        : applicationStatus || null,
+
+                    intended_application_date:
+                        registered
+                            ? null
+                            : intendedApplicationDate || null,
+
+                    joining_date: registered
+                        ? joiningDate || null
+                        : null,
+
+                    membership_status: registered
+                        ? membershipStatus || null
+                        : null,
+
+                    important_dates:
+                        importantDates || null,
+
+                    documents: documents || null,
+
+                    notes: notes || null,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to save profile");
+            }
+
+            setSaved(true);
+        } catch (err) {
+            console.error(err);
+            setError("Unable to save your Inn information.");
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    function changeRegistrationStatus(value: boolean) {
+        setRegistered(value);
+        setSaved(false);
+
+        // Clear fields that no longer apply.
+        if (value) {
+            setApplicationStatus("");
+            setIntendedApplicationDate("");
+        } else {
+            setJoiningDate("");
+            setMembershipStatus("");
+        }
+    }
+
+    if (loading) {
+        return (
+            <main className="min-h-screen bg-[#f6f7fb] p-10">
+                <div className="mx-auto max-w-4xl">
+                    <p className="text-sm text-slate-500">
+                        Loading Inn information...
+                    </p>
+                </div>
+            </main>
+        );
+    }
 
     return (
-        <main className="min-h-screen bg-[#f6f7fb] text-slate-900">
-            <div className="flex min-h-screen">
+        <main className="min-h-screen bg-[#f6f7fb]">
 
-                {/* Sidebar */}
-                <aside className="hidden w-64 flex-col bg-[#171b3a] text-white md:flex">
+            {/* Header */}
+            <header className="border-b border-slate-200 bg-white">
+                <div className="mx-auto max-w-4xl px-6 py-6">
 
-                    <div className="border-b border-white/10 px-6 py-6">
-                        <Link href="/" className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg font-bold text-[#171b3a]">
-                                B
-                            </div>
-
-                            <div>
-                                <h1 className="text-lg font-semibold">
-                                    BarStudy
-                                </h1>
-
-                                <p className="text-xs text-slate-400">
-                                    Bar Course Hub
-                                </p>
-                            </div>
+                    <div className="flex items-center gap-3 text-sm">
+                        <Link
+                            href="/"
+                            className="text-slate-500 hover:text-slate-900"
+                        >
+                            Dashboard
                         </Link>
+
+                        <span className="text-slate-300">
+                            /
+                        </span>
+
+                        <span className="font-medium text-slate-900">
+                            Inn of Court
+                        </span>
                     </div>
 
-                    <nav className="flex-1 px-4 py-6">
+                    <div className="mt-6">
 
-                        <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-                            Workspace
+                        <p className="text-sm font-medium text-indigo-600">
+                            Bar Course
                         </p>
 
-                        <div className="space-y-1">
-                            <NavItem href="/" label="Dashboard" icon="⌂" />
-                            <NavItem href="/subjects" label="Subjects" icon="▤" />
-                            <NavItem href="/exams" label="Exams" icon="□" />
-                            <NavItem href="/study" label="Study Planner" icon="◷" />
-                            <NavItem href="/tasks" label="Tasks" icon="✓" />
-                            <NavItem href="/resources" label="Resources" icon="▱" />
-                            <NavItem
-                                href="/inn"
-                                label="Inn of Court"
-                                icon="⚖"
-                                active
-                            />
-                        </div>
+                        <h1 className="mt-1 text-3xl font-bold tracking-tight">
+                            Inn of Court
+                        </h1>
 
-                    </nav>
-                </aside>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                            Keep track of your Inn registration,
+                            application information and important
+                            dates.
+                        </p>
 
-                {/* Main */}
-                <section className="flex-1">
+                    </div>
 
-                    <header className="flex min-h-20 items-center justify-between border-b border-slate-200 bg-white px-6 py-4 lg:px-10">
+                </div>
+            </header>
 
-                        <div>
-                            <p className="text-sm text-slate-500">
-                                Professional development
+            {/* Content */}
+            <div className="mx-auto max-w-4xl px-6 py-8">
+
+                {/* Registration status */}
+                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+
+                    <h2 className="text-lg font-semibold">
+                        Inn registration
+                    </h2>
+
+                    <p className="mt-1 text-sm text-slate-500">
+                        Have you already registered with an Inn
+                        of Court?
+                    </p>
+
+                    <div className="mt-5 grid grid-cols-2 gap-3">
+
+                        <button
+                            type="button"
+                            onClick={() =>
+                                changeRegistrationStatus(false)
+                            }
+                            className={`rounded-xl border px-5 py-4 text-left transition ${!registered
+                                ? "border-indigo-600 bg-indigo-50"
+                                : "border-slate-200 hover:border-slate-300"
+                                }`}
+                        >
+                            <p
+                                className={`font-semibold ${!registered
+                                    ? "text-indigo-700"
+                                    : "text-slate-900"
+                                    }`}
+                            >
+                                Not yet
                             </p>
 
-                            <h2 className="text-xl font-semibold">
-                                Inn of Court
-                            </h2>
-                        </div>
+                            <p className="mt-1 text-xs text-slate-500">
+                                I am planning or applying to join an Inn.
+                            </p>
+                        </button>
 
-                    </header>
-
-                    <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
-
-                        <div className="mb-8">
-                            <p className="text-sm font-medium text-indigo-600">
-                                Inn management
+                        <button
+                            type="button"
+                            onClick={() =>
+                                changeRegistrationStatus(true)
+                            }
+                            className={`rounded-xl border px-5 py-4 text-left transition ${registered
+                                ? "border-indigo-600 bg-indigo-50"
+                                : "border-slate-200 hover:border-slate-300"
+                                }`}
+                        >
+                            <p
+                                className={`font-semibold ${registered
+                                    ? "text-indigo-700"
+                                    : "text-slate-900"
+                                    }`}
+                            >
+                                Yes
                             </p>
 
-                            <h1 className="mt-1 text-3xl font-bold tracking-tight">
-                                Your Inn
-                            </h1>
-
-                            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                                Keep your Inn information, events and related
-                                activities alongside your Bar course.
+                            <p className="mt-1 text-xs text-slate-500">
+                                I have already registered with an Inn.
                             </p>
-                        </div>
+                        </button>
 
-                        {/* Registration toggle */}
-                        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    </div>
 
-                            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                </section>
 
-                                <div>
-                                    <h2 className="font-semibold">
-                                        Have you already registered with an Inn?
-                                    </h2>
+                {/* Inn information */}
+                <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 
-                                    <p className="mt-1 text-sm text-slate-500">
-                                        This determines which Inn information is shown
-                                        to you.
-                                    </p>
-                                </div>
+                    <div className="mb-6">
 
-                                <div className="flex rounded-xl bg-slate-100 p-1">
+                        <h2 className="text-lg font-semibold">
+                            {registered
+                                ? "Your Inn"
+                                : "Inn information"}
+                        </h2>
 
-                                    <button
-                                        onClick={() => setRegistered(false)}
-                                        className={`rounded-lg px-4 py-2 text-sm font-medium transition ${!registered
-                                            ? "bg-white text-slate-900 shadow-sm"
-                                            : "text-slate-500"
-                                            }`}
-                                    >
-                                        Not yet
-                                    </button>
+                        <p className="mt-1 text-sm text-slate-500">
+                            {registered
+                                ? "Keep your membership information organised."
+                                : "Keep track of your planned Inn application."}
+                        </p>
 
-                                    <button
-                                        onClick={() => setRegistered(true)}
-                                        className={`rounded-lg px-4 py-2 text-sm font-medium transition ${registered
-                                            ? "bg-[#171b3a] text-white shadow-sm"
-                                            : "text-slate-500"
-                                            }`}
-                                    >
-                                        Yes
-                                    </button>
+                    </div>
 
-                                </div>
+                    <div className="space-y-5">
 
-                            </div>
+                        {/* Inn */}
+                        <Field label="Inn of Court">
 
-                        </section>
+                            <select
+                                value={innName}
+                                onChange={(e) =>
+                                    setInnName(e.target.value)
+                                }
+                                className="input"
+                            >
+                                <option value="">
+                                    Select an Inn
+                                </option>
+
+                                <option value="Gray's Inn">
+                                    Gray's Inn
+                                </option>
+
+                                <option value="Lincoln's Inn">
+                                    Lincoln's Inn
+                                </option>
+
+                                <option value="Inner Temple">
+                                    Inner Temple
+                                </option>
+
+                                <option value="Middle Temple">
+                                    Middle Temple
+                                </option>
+                            </select>
+
+                        </Field>
 
                         {/* NOT REGISTERED */}
                         {!registered && (
-                            <div className="mt-6 space-y-6">
+                            <>
+                                <Field label="Application status">
 
-                                <section className="rounded-2xl border border-indigo-100 bg-indigo-50 p-6">
-
-                                    <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">
-                                        Next step
-                                    </p>
-
-                                    <h2 className="mt-2 text-xl font-semibold">
-                                        Choose an Inn
-                                    </h2>
-
-                                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                                        If you haven't registered yet, you can use
-                                        BarStudy to keep track of your decision and
-                                        registration-related tasks.
-                                    </p>
-
-                                    <button
-                                        onClick={() => setShowForm(!showForm)}
-                                        className="mt-5 rounded-xl bg-[#171b3a] px-4 py-2.5 text-sm font-medium text-white"
+                                    <select
+                                        value={applicationStatus}
+                                        onChange={(e) =>
+                                            setApplicationStatus(
+                                                e.target.value
+                                            )
+                                        }
+                                        className="input"
                                     >
-                                        {showForm
-                                            ? "Close"
-                                            : "Start Inn planning"}
-                                    </button>
+                                        <option value="">
+                                            Select status
+                                        </option>
 
-                                </section>
+                                        <option value="Considering">
+                                            Considering
+                                        </option>
 
-                                {showForm && (
-                                    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                                        <option value="Preparing application">
+                                            Preparing application
+                                        </option>
 
-                                        <h2 className="font-semibold">
-                                            Which Inn are you considering?
-                                        </h2>
+                                        <option value="Application submitted">
+                                            Application submitted
+                                        </option>
 
-                                        <div className="mt-5 grid gap-3 md:grid-cols-2">
+                                        <option value="Accepted">
+                                            Accepted
+                                        </option>
+                                    </select>
 
-                                            {inns.map((inn) => (
-                                                <button
-                                                    key={inn}
-                                                    onClick={() => setSelectedInn(inn)}
-                                                    className={`rounded-xl border p-4 text-left transition ${selectedInn === inn
-                                                        ? "border-indigo-500 bg-indigo-50"
-                                                        : "border-slate-200 hover:border-slate-300"
-                                                        }`}
-                                                >
-                                                    <p className="font-medium">
-                                                        {inn}
-                                                    </p>
+                                </Field>
 
-                                                    <p className="mt-1 text-xs text-slate-400">
-                                                        Select this Inn
-                                                    </p>
-                                                </button>
-                                            ))}
+                                <Field label="Intended application date">
 
-                                        </div>
+                                    <input
+                                        type="date"
+                                        value={intendedApplicationDate}
+                                        onChange={(e) =>
+                                            setIntendedApplicationDate(
+                                                e.target.value
+                                            )
+                                        }
+                                        className="input"
+                                    />
 
-                                        {selectedInn && (
-                                            <div className="mt-5 rounded-xl bg-slate-50 p-4">
-
-                                                <p className="text-xs text-slate-400">
-                                                    Selected Inn
-                                                </p>
-
-                                                <p className="mt-1 font-semibold">
-                                                    {selectedInn}
-                                                </p>
-
-                                                <button
-                                                    onClick={() => setRegistered(true)}
-                                                    className="mt-4 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white"
-                                                >
-                                                    I've registered with this Inn
-                                                </button>
-
-                                            </div>
-                                        )}
-
-                                    </section>
-                                )}
-
-                                {/* Registration checklist */}
-                                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-
-                                    <h2 className="font-semibold">
-                                        Registration checklist
-                                    </h2>
-
-                                    <div className="mt-5 space-y-3">
-
-                                        <ChecklistItem
-                                            title="Research the Inns"
-                                            description="Compare the Inns and decide which is appropriate for you."
-                                        />
-
-                                        <ChecklistItem
-                                            title="Check registration requirements"
-                                            description="Review the current requirements and deadlines."
-                                        />
-
-                                        <ChecklistItem
-                                            title="Prepare required documents"
-                                            description="Keep any required documents and information ready."
-                                        />
-
-                                        <ChecklistItem
-                                            title="Complete registration"
-                                            description="Record your registration once completed."
-                                        />
-
-                                    </div>
-
-                                </section>
-
-                            </div>
+                                </Field>
+                            </>
                         )}
 
                         {/* REGISTERED */}
                         {registered && (
-                            <div className="mt-6 space-y-6">
+                            <>
+                                <Field label="Membership status">
 
-                                <section className="rounded-2xl border border-emerald-100 bg-emerald-50 p-6">
+                                    <select
+                                        value={membershipStatus}
+                                        onChange={(e) =>
+                                            setMembershipStatus(
+                                                e.target.value
+                                            )
+                                        }
+                                        className="input"
+                                    >
+                                        <option value="">
+                                            Select status
+                                        </option>
 
-                                    <div className="flex items-start gap-4">
+                                        <option value="Student member">
+                                            Student member
+                                        </option>
 
-                                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500 text-white">
-                                            ✓
-                                        </div>
+                                        <option value="Member">
+                                            Member
+                                        </option>
 
-                                        <div>
-                                            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600">
-                                                Registration complete
-                                            </p>
+                                        <option value="Called to the Bar">
+                                            Called to the Bar
+                                        </option>
+                                    </select>
 
-                                            <h2 className="mt-1 text-xl font-semibold">
-                                                Your Inn information
-                                            </h2>
+                                </Field>
 
-                                            <p className="mt-1 text-sm text-slate-600">
-                                                Registration guidance is hidden because
-                                                you have indicated that you are already
-                                                registered.
-                                            </p>
-                                        </div>
+                                <Field label="Joining date">
 
-                                    </div>
-
-                                </section>
-
-                                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-
-                                    <h2 className="font-semibold">
-                                        Your Inn
-                                    </h2>
-
-                                    <div className="mt-5">
-
-                                        <label className="text-xs font-medium text-slate-600">
-                                            Inn
-                                        </label>
-
-                                        <select
-                                            value={selectedInn}
-                                            onChange={(e) =>
-                                                setSelectedInn(e.target.value)
-                                            }
-                                            className="mt-2 w-full max-w-md rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
-                                        >
-                                            <option value="">
-                                                Select your Inn
-                                            </option>
-
-                                            {inns.map((inn) => (
-                                                <option key={inn}>{inn}</option>
-                                            ))}
-                                        </select>
-
-                                    </div>
-
-                                </section>
-
-                                <section className="grid gap-4 md:grid-cols-3">
-
-                                    <InfoCard
-                                        title="Inn events"
-                                        description="Keep track of dinners, qualifying sessions and other events."
+                                    <input
+                                        type="date"
+                                        value={joiningDate}
+                                        onChange={(e) =>
+                                            setJoiningDate(
+                                                e.target.value
+                                            )
+                                        }
+                                        className="input"
                                     />
 
-                                    <InfoCard
-                                        title="Inn tasks"
-                                        description="Manage registration-related or professional activities."
-                                    />
-
-                                    <InfoCard
-                                        title="Important dates"
-                                        description="Keep relevant deadlines and events alongside your course."
-                                    />
-
-                                </section>
-
-                            </div>
+                                </Field>
+                            </>
                         )}
 
+                        {/* Common fields */}
+                        <Field
+                            label={
+                                registered
+                                    ? "Important dates"
+                                    : "Important application dates"
+                            }
+                        >
+
+                            <textarea
+                                value={importantDates}
+                                onChange={(e) =>
+                                    setImportantDates(
+                                        e.target.value
+                                    )
+                                }
+                                rows={4}
+                                placeholder="For example: application deadline, qualifying sessions, dinners..."
+                                className="input resize-none"
+                            />
+
+                        </Field>
+
+                        <Field label="Documents">
+
+                            <textarea
+                                value={documents}
+                                onChange={(e) =>
+                                    setDocuments(e.target.value)
+                                }
+                                rows={4}
+                                placeholder="Keep track of documents you need to prepare or submit..."
+                                className="input resize-none"
+                            />
+
+                        </Field>
+
+                        <Field label="Notes">
+
+                            <textarea
+                                value={notes}
+                                onChange={(e) =>
+                                    setNotes(e.target.value)
+                                }
+                                rows={4}
+                                placeholder="Anything else you want to remember..."
+                                className="input resize-none"
+                            />
+
+                        </Field>
+
                     </div>
+
                 </section>
+
+                {/* Messages */}
+                {error && (
+                    <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4">
+                        <p className="text-sm text-red-600">
+                            {error}
+                        </p>
+                    </div>
+                )}
+
+                {saved && (
+                    <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4">
+                        <p className="text-sm font-medium text-green-700">
+                            Inn information saved successfully.
+                        </p>
+                    </div>
+                )}
+
+                {/* Save */}
+                <div className="mt-6 flex justify-end">
+
+                    <button
+                        type="button"
+                        onClick={saveProfile}
+                        disabled={saving}
+                        className="rounded-xl bg-[#171b3a] px-6 py-3 text-sm font-medium text-white transition hover:bg-[#222750] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {saving
+                            ? "Saving..."
+                            : "Save Inn information"}
+                    </button>
+
+                </div>
+
             </div>
         </main>
     );
 }
 
-function NavItem({
-    href,
+function Field({
     label,
-    icon,
-    active = false,
+    children,
 }: {
-    href: string;
     label: string;
-    icon: string;
-    active?: boolean;
+    children: React.ReactNode;
 }) {
     return (
-        <Link
-            href={href}
-            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${active
-                ? "bg-white/10 text-white"
-                : "text-slate-400 hover:bg-white/5 hover:text-white"
-                }`}
-        >
-            <span className="flex w-5 justify-center">
-                {icon}
-            </span>
+        <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+                {label}
+            </label>
 
-            {label}
-        </Link>
-    );
-}
-
-function ChecklistItem({
-    title,
-    description,
-}: {
-    title: string;
-    description: string;
-}) {
-    return (
-        <div className="flex gap-3 rounded-xl border border-slate-100 p-4">
-
-            <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-slate-300" />
-
-            <div>
-                <p className="text-sm font-medium">
-                    {title}
-                </p>
-
-                <p className="mt-1 text-xs leading-5 text-slate-400">
-                    {description}
-                </p>
-            </div>
-
-        </div>
-    );
-}
-
-function InfoCard({
-    title,
-    description,
-}: {
-    title: string;
-    description: string;
-}) {
-    return (
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-
-            <h2 className="font-semibold">
-                {title}
-            </h2>
-
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-                {description}
-            </p>
-
-            <button className="mt-4 text-sm font-medium text-indigo-600">
-                Manage →
-            </button>
-
+            {children}
         </div>
     );
 }
