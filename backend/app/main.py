@@ -2,7 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.api.exams import router as exams_router
+from backend.app.api.study_sessions import router as study_sessions_router
 from backend.app.api.subjects import router as subjects_router
+from backend.app.api.tasks import router as tasks_router
 from backend.app.db.database import Base, engine
 from backend.app.models.user import User
 
@@ -50,6 +52,8 @@ app.add_middleware(
 
 app.include_router(subjects_router)
 app.include_router(exams_router)
+app.include_router(tasks_router)
+app.include_router(study_sessions_router)
 
 
 @app.get("/")

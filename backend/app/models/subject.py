@@ -40,3 +40,15 @@ class Subject(Base):
         back_populates="subject",
         cascade="all, delete-orphan",
     )
+
+    tasks = relationship(
+        "Task",
+        back_populates="subject",
+        cascade="all, delete-orphan",
+    )
+
+    study_sessions = relationship(
+        "StudySession",
+        back_populates="subject",
+        cascade="all, delete-orphan",
+    )

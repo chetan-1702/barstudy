@@ -1,134 +1,177 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-type StudySession = {
-    id: number;
-    day: string;
-    date: string;
-    subject: string;
-    topic: string;
-    duration: number;
-    completed: boolean;
-};
+import {
+    createStudySession,
+    deleteStudySession,
+    getStudySessions,
+    type StudySession,
+} from "../../src/services/study-sessions";
 
-const initialSessions: StudySession[] = [
-    {
-        id: 1,
-        day: "Mon",
-        date: "17 Aug",
-        subject: "Criminal Law",
-        topic: "Homicide",
-        duration: 2,
-        completed: true,
-    },
-    {
-        id: 2,
-        day: "Tue",
-        date: "18 Aug",
-        subject: "Evidence",
-        topic: "Admissibility",
-        duration: 2,
-        completed: false,
-    },
-    {
-        id: 3,
-        day: "Wed",
-        date: "19 Aug",
-        subject: "Civil Litigation",
-        topic: "Pre-action Protocols",
-        duration: 2.5,
-        completed: false,
-    },
-    {
-        id: 4,
-        day: "Thu",
-        date: "20 Aug",
-        subject: "Criminal Law",
-        topic: "Defences",
-        duration: 2,
-        completed: false,
-    },
-    {
-        id: 5,
-        day: "Fri",
-        date: "21 Aug",
-        subject: "Advocacy",
-        topic: "Opening submissions",
-        duration: 1.5,
-        completed: false,
-    },
-];
-
-const days = [
-    { day: "Mon", date: "17 Aug" },
-    { day: "Tue", date: "18 Aug" },
-    { day: "Wed", date: "19 Aug" },
-    { day: "Thu", date: "20 Aug" },
-    { day: "Fri", date: "21 Aug" },
-    { day: "Sat", date: "22 Aug" },
-    { day: "Sun", date: "23 Aug" },
-];
+import {
+    getSubjects,
+    type Subject,
+} from "../../src/services/subjects";
 
 export default function StudyPage() {
-    const [sessions, setSessions] = useState(initialSessions);
+    const [sessions, setSessions] = useState<StudySession[]>([]);
+    const [subjects, setSubjects] = useState<Subject[]>([]);
+
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [showForm, setShowForm] = useState(false);
 
-    const [day, setDay] = useState("Mon");
-    const [subject, setSubject] = useState("Criminal Law");
-    const [topic, setTopic] = useState("");
-    const [duration, setDuration] = useState("2");
+    const [title, setTitle] = useState("");
+    const [subjectId, setSubjectId] = useState("");
+    const [sessionDate, setSessionDate] = useState(
+        new Date().toISOString().split("T")[0]
+    );
+    const [duration, setDuration] = useState("");
+    const [notes, setNotes] = useState("");
 
-    const plannedHours = sessions.reduce(
-        (total, session) => total + session.duration,
-        0
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    async function loadData() {
+        try {
+            setLoading(true);
+            setError(null);
+
+            const [sessionData, subjectData] =
+                await Promise.all([
+                    getStudySessions(),
+                    getSubjects(),
+                ]);
+
+            setSessions(sessionData);
+            setSubjects(subjectData);
+
+            if (subjectData.length > 0) {
+                setSubjectId(String(subjectData[0].id));
+            }
+        } catch (err) {
+            console.error(err);
+            setError("Unable to load study sessions.");
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function handleAddSession(
+        event: React.FormEvent<HTMLFormElement>
+    ) {
+        event.preventDefault();
+
+        if (
+            !title.trim() ||
+            !subjectId ||
+            !sessionDate ||
+            !duration
+        ) {
+            setError(
+                "Please provide a subject, title, date and duration."
+            );
+            return;
+        }
+
+        const durationMinutes = Number(duration);
+
+        if (durationMinutes <= 0) {
+            setError("Duration must be greater than zero.");
+            return;
+        }
+
+        try {
+            setError(null);
+
+            const newSession = await createStudySession({
+                subject_id: Number(subjectId),
+                title: title.trim(),
+                session_date: sessionDate,
+                duration_minutes: durationMinutes,
+                notes: notes.trim() || undefined,
+            });
+
+            setSessions((current) => [
+                newSession,
+                ...current,
+            ]);
+
+            setTitle("");
+            setDuration("");
+            setNotes("");
+            setShowForm(false);
+        } catch (err) {
+            console.error(err);
+            setError("Unable to create study session.");
+        }
+    }
+
+    async function handleDelete(id: number) {
+        if (!window.confirm("Delete this study session?")) {
+            return;
+        }
+
+        try {
+            setError(null);
+
+            await deleteStudySession(id);
+
+            setSessions((current) =>
+                current.filter((session) => session.id !== id)
+            );
+        } catch (err) {
+            console.error(err);
+            setError("Unable to delete study session.");
+        }
+    }
+
+    function getSubjectName(subjectId: number) {
+        return (
+            subjects.find(
+                (subject) => subject.id === subjectId
+            )?.name || "Unknown subject"
+        );
+    }
+
+    function formatDate(date: string) {
+        return new Date(date).toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+        });
+    }
+
+    function formatDuration(minutes: number) {
+        const hours = Math.floor(minutes / 60);
+        const remainingMinutes = minutes % 60;
+
+        if (hours === 0) {
+            return `${remainingMinutes}m`;
+        }
+
+        if (remainingMinutes === 0) {
+            return `${hours}h`;
+        }
+
+        return `${hours}h ${remainingMinutes}m`;
+    }
+
+    const totalMinutes = useMemo(
+        () =>
+            sessions.reduce(
+                (total, session) =>
+                    total + session.duration_minutes,
+                0
+            ),
+        [sessions]
     );
 
-    const completedHours = sessions
-        .filter((session) => session.completed)
-        .reduce((total, session) => total + session.duration, 0);
-
-    function addSession(e: React.FormEvent) {
-        e.preventDefault();
-
-        if (!topic || !duration) return;
-
-        const selectedDay = days.find((item) => item.day === day);
-
-        setSessions((current) => [
-            ...current,
-            {
-                id: Date.now(),
-                day,
-                date: selectedDay?.date || "",
-                subject,
-                topic,
-                duration: Number(duration),
-                completed: false,
-            },
-        ]);
-
-        setTopic("");
-        setDuration("2");
-        setShowForm(false);
-    }
-
-    function toggleSession(id: number) {
-        setSessions((current) =>
-            current.map((session) =>
-                session.id === id
-                    ? { ...session, completed: !session.completed }
-                    : session
-            )
-        );
-    }
-
-    function deleteSession(id: number) {
-        setSessions((current) =>
-            current.filter((session) => session.id !== id)
-        );
-    }
+    const totalHours = Math.floor(totalMinutes / 60);
+    const remainingMinutes = totalMinutes % 60;
 
     return (
         <main className="min-h-screen bg-[#f6f7fb] text-slate-900">
@@ -137,14 +180,22 @@ export default function StudyPage() {
                 {/* Sidebar */}
                 <aside className="hidden w-64 flex-col bg-[#171b3a] text-white md:flex">
                     <div className="border-b border-white/10 px-6 py-6">
-                        <Link href="/" className="flex items-center gap-3">
+                        <Link
+                            href="/"
+                            className="flex items-center gap-3"
+                        >
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg font-bold text-[#171b3a]">
                                 B
                             </div>
 
                             <div>
-                                <h1 className="text-lg font-semibold">BarStudy</h1>
-                                <p className="text-xs text-slate-400">Bar Course Hub</p>
+                                <h1 className="text-lg font-semibold">
+                                    BarStudy
+                                </h1>
+
+                                <p className="text-xs text-slate-400">
+                                    Bar Course Hub
+                                </p>
                             </div>
                         </Link>
                     </div>
@@ -155,284 +206,365 @@ export default function StudyPage() {
                         </p>
 
                         <div className="space-y-1">
-                            <NavItem href="/" label="Dashboard" icon="⌂" />
-                            <NavItem href="/subjects" label="Subjects" icon="▤" />
-                            <NavItem href="/exams" label="Exams" icon="□" />
-                            <NavItem href="/study" label="Study Planner" icon="◷" active />
-                            <NavItem href="/tasks" label="Tasks" icon="✓" />
-                            <NavItem href="/resources" label="Resources" icon="▱" />
-                            <NavItem href="/inn" label="Inn of Court" icon="⚖" />
+                            <NavItem
+                                href="/"
+                                label="Dashboard"
+                                icon="⌂"
+                            />
+
+                            <NavItem
+                                href="/subjects"
+                                label="Subjects"
+                                icon="▤"
+                            />
+
+                            <NavItem
+                                href="/exams"
+                                label="Exams"
+                                icon="□"
+                            />
+
+                            <NavItem
+                                href="/study"
+                                label="Study Planner"
+                                icon="◷"
+                                active
+                            />
+
+                            <NavItem
+                                href="/tasks"
+                                label="Tasks"
+                                icon="✓"
+                            />
+
+                            <NavItem
+                                href="/resources"
+                                label="Resources"
+                                icon="▱"
+                            />
+
+                            <NavItem
+                                href="/inn"
+                                label="Inn of Court"
+                                icon="⚖"
+                            />
                         </div>
                     </nav>
+
+                    <div className="border-t border-white/10 p-4">
+                        <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-500 text-sm font-semibold">
+                                C
+                            </div>
+
+                            <div>
+                                <p className="text-sm font-medium">
+                                    Chetan
+                                </p>
+
+                                <p className="text-xs text-slate-500">
+                                    Bar Course Student
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </aside>
 
                 {/* Main */}
                 <section className="flex-1">
 
-                    <header className="flex min-h-20 items-center justify-between border-b border-slate-200 bg-white px-6 py-4 lg:px-10">
+                    <header className="flex h-20 items-center justify-between border-b border-slate-200 bg-white px-6 lg:px-10">
                         <div>
-                            <p className="text-sm text-slate-500">Your course</p>
-                            <h2 className="text-xl font-semibold">Study Planner</h2>
+                            <p className="text-sm text-slate-500">
+                                Study management
+                            </p>
+
+                            <h2 className="text-xl font-semibold">
+                                Study Planner
+                            </h2>
                         </div>
 
                         <button
-                            onClick={() => setShowForm(!showForm)}
+                            onClick={() =>
+                                setShowForm((current) => !current)
+                            }
                             className="rounded-xl bg-[#171b3a] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#222750]"
                         >
-                            + Add study session
+                            {showForm ? "Cancel" : "+ Log study session"}
                         </button>
                     </header>
 
-                    <div className="mx-auto max-w-[1500px] p-6 lg:p-10">
+                    <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
 
                         <div className="mb-8">
                             <p className="text-sm font-medium text-indigo-600">
-                                Weekly planning
+                                Study activity
                             </p>
 
                             <h1 className="mt-1 text-3xl font-bold tracking-tight">
-                                Study planner
+                                Your study sessions
                             </h1>
 
-                            <p className="mt-2 text-sm text-slate-500">
-                                Plan your study sessions and keep track of the time you've
-                                actually completed.
+                            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                                Keep a record of your revision and see how
+                                much time you are putting into your studies.
                             </p>
                         </div>
 
-                        {/* Stats */}
-                        <div className="mb-6 grid gap-4 sm:grid-cols-3">
-                            <Stat
-                                label="Planned"
-                                value={`${plannedHours}h`}
-                                detail="This week"
+                        {error && (
+                            <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4">
+                                <p className="text-sm text-red-600">
+                                    {error}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Summary */}
+                        <div className="mb-8 grid gap-4 md:grid-cols-3">
+
+                            <StatCard
+                                label="Total study time"
+                                value={`${totalHours}h ${remainingMinutes}m`}
                             />
 
-                            <Stat
-                                label="Completed"
-                                value={`${completedHours}h`}
-                                detail="Study completed"
+                            <StatCard
+                                label="Study sessions"
+                                value={String(sessions.length)}
                             />
 
-                            <Stat
-                                label="Progress"
+                            <StatCard
+                                label="Average session"
                                 value={
-                                    plannedHours
-                                        ? `${Math.round((completedHours / plannedHours) * 100)}%`
-                                        : "0%"
+                                    sessions.length > 0
+                                        ? formatDuration(
+                                            Math.round(
+                                                totalMinutes /
+                                                sessions.length
+                                            )
+                                        )
+                                        : "0m"
                                 }
-                                detail="Of planned study"
                             />
+
                         </div>
 
                         {/* Add session */}
                         {showForm && (
                             <form
-                                onSubmit={addSession}
-                                className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+                                onSubmit={handleAddSession}
+                                className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
                             >
-                                <h2 className="font-semibold">Plan a study session</h2>
+                                <h2 className="text-lg font-semibold">
+                                    Log a study session
+                                </h2>
 
-                                <div className="mt-5 grid gap-4 md:grid-cols-4">
+                                <div className="mt-5 grid gap-5 md:grid-cols-2">
 
                                     <div>
-                                        <label className="text-xs font-medium text-slate-600">
-                                            Day
+                                        <label className="text-sm font-medium text-slate-700">
+                                            Subject
                                         </label>
 
                                         <select
-                                            value={day}
-                                            onChange={(e) => setDay(e.target.value)}
-                                            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
+                                            value={subjectId}
+                                            onChange={(e) =>
+                                                setSubjectId(e.target.value)
+                                            }
+                                            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
                                         >
-                                            {days.map((item) => (
-                                                <option key={item.day}>{item.day}</option>
+                                            {subjects.map((subject) => (
+                                                <option
+                                                    key={subject.id}
+                                                    value={subject.id}
+                                                >
+                                                    {subject.name}
+                                                </option>
                                             ))}
                                         </select>
                                     </div>
 
                                     <div>
-                                        <label className="text-xs font-medium text-slate-600">
-                                            Subject
-                                        </label>
-
-                                        <select
-                                            value={subject}
-                                            onChange={(e) => setSubject(e.target.value)}
-                                            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
-                                        >
-                                            <option>Criminal Law</option>
-                                            <option>Civil Litigation</option>
-                                            <option>Evidence</option>
-                                            <option>Professional Conduct</option>
-                                            <option>Advocacy</option>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="text-xs font-medium text-slate-600">
-                                            Topic
+                                        <label className="text-sm font-medium text-slate-700">
+                                            Session title
                                         </label>
 
                                         <input
-                                            value={topic}
-                                            onChange={(e) => setTopic(e.target.value)}
-                                            placeholder="e.g. Homicide"
-                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+                                            value={title}
+                                            onChange={(e) =>
+                                                setTitle(e.target.value)
+                                            }
+                                            placeholder="Criminal Law revision"
+                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
                                         />
                                     </div>
 
                                     <div>
-                                        <label className="text-xs font-medium text-slate-600">
-                                            Duration
+                                        <label className="text-sm font-medium text-slate-700">
+                                            Date
                                         </label>
 
-                                        <select
+                                        <input
+                                            type="date"
+                                            value={sessionDate}
+                                            onChange={(e) =>
+                                                setSessionDate(e.target.value)
+                                            }
+                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-sm font-medium text-slate-700">
+                                            Duration (minutes)
+                                        </label>
+
+                                        <input
+                                            type="number"
+                                            min="1"
                                             value={duration}
-                                            onChange={(e) => setDuration(e.target.value)}
-                                            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
-                                        >
-                                            <option value="0.5">30 minutes</option>
-                                            <option value="1">1 hour</option>
-                                            <option value="1.5">1.5 hours</option>
-                                            <option value="2">2 hours</option>
-                                            <option value="2.5">2.5 hours</option>
-                                            <option value="3">3 hours</option>
-                                            <option value="4">4 hours</option>
-                                        </select>
+                                            onChange={(e) =>
+                                                setDuration(e.target.value)
+                                            }
+                                            placeholder="90"
+                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
+                                        />
+                                    </div>
+
+                                    <div className="md:col-span-2">
+                                        <label className="text-sm font-medium text-slate-700">
+                                            Notes
+                                        </label>
+
+                                        <textarea
+                                            value={notes}
+                                            onChange={(e) =>
+                                                setNotes(e.target.value)
+                                            }
+                                            rows={3}
+                                            placeholder="What did you study?"
+                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
+                                        />
                                     </div>
 
                                 </div>
 
-                                <div className="mt-5 flex gap-3">
+                                <div className="mt-5 flex justify-end">
                                     <button
                                         type="submit"
-                                        className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white"
+                                        className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700"
                                     >
-                                        Add session
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowForm(false)}
-                                        className="rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-600"
-                                    >
-                                        Cancel
+                                        Save session
                                     </button>
                                 </div>
                             </form>
                         )}
 
-                        {/* Week */}
-                        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-
-                            <div className="mb-6">
-                                <h2 className="font-semibold">Week of 17 August</h2>
-                                <p className="mt-1 text-xs text-slate-500">
-                                    Your planned study sessions
+                        {/* Sessions */}
+                        {loading ? (
+                            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+                                <p className="text-sm text-slate-500">
+                                    Loading study sessions...
                                 </p>
                             </div>
+                        ) : sessions.length === 0 ? (
+                            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+                                <h2 className="font-semibold">
+                                    No study sessions yet
+                                </h2>
 
+                                <p className="mt-2 text-sm text-slate-500">
+                                    Log your first study session to start
+                                    tracking your progress.
+                                </p>
+                            </div>
+                        ) : (
                             <div className="space-y-3">
+                                {sessions.map((session) => (
+                                    <article
+                                        key={session.id}
+                                        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                                    >
+                                        <div className="flex items-start gap-4">
 
-                                {days.map((dayItem) => {
-                                    const daySessions = sessions.filter(
-                                        (session) => session.day === dayItem.day
-                                    );
-
-                                    return (
-                                        <div
-                                            key={dayItem.day}
-                                            className="grid gap-3 border-b border-slate-100 pb-4 last:border-0 last:pb-0 md:grid-cols-[100px_1fr]"
-                                        >
-                                            <div>
-                                                <p className="text-sm font-semibold">
-                                                    {dayItem.day}
-                                                </p>
-
-                                                <p className="text-xs text-slate-400">
-                                                    {dayItem.date}
-                                                </p>
+                                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                                                ◷
                                             </div>
 
-                                            <div className="space-y-2">
+                                            <div className="min-w-0 flex-1">
 
-                                                {daySessions.length === 0 ? (
-                                                    <div className="rounded-xl border border-dashed border-slate-200 px-4 py-3 text-xs text-slate-400">
-                                                        No study sessions planned
-                                                    </div>
-                                                ) : (
-                                                    daySessions.map((session) => (
-                                                        <div
-                                                            key={session.id}
-                                                            className={`flex items-center justify-between gap-4 rounded-xl border p-4 ${session.completed
-                                                                ? "border-emerald-100 bg-emerald-50/50"
-                                                                : "border-slate-200"
-                                                                }`}
-                                                        >
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <h3 className="font-semibold">
+                                                        {session.title}
+                                                    </h3>
 
-                                                            <div className="flex min-w-0 items-center gap-3">
+                                                    <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-600">
+                                                        {getSubjectName(
+                                                            session.subject_id
+                                                        )}
+                                                    </span>
+                                                </div>
 
-                                                                <button
-                                                                    onClick={() =>
-                                                                        toggleSession(session.id)
-                                                                    }
-                                                                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-xs ${session.completed
-                                                                        ? "border-emerald-500 bg-emerald-500 text-white"
-                                                                        : "border-slate-300 text-transparent"
-                                                                        }`}
-                                                                >
-                                                                    ✓
-                                                                </button>
+                                                <p className="mt-1 text-sm text-slate-500">
+                                                    {formatDate(
+                                                        session.session_date
+                                                    )}
+                                                </p>
 
-                                                                <div className="min-w-0">
-                                                                    <p
-                                                                        className={`text-sm font-medium ${session.completed
-                                                                            ? "text-slate-400 line-through"
-                                                                            : "text-slate-700"
-                                                                            }`}
-                                                                    >
-                                                                        {session.topic}
-                                                                    </p>
-
-                                                                    <p className="mt-1 text-xs text-slate-400">
-                                                                        {session.subject}
-                                                                    </p>
-                                                                </div>
-
-                                                            </div>
-
-                                                            <div className="flex shrink-0 items-center gap-4">
-                                                                <span className="text-sm font-semibold text-slate-600">
-                                                                    {session.duration}h
-                                                                </span>
-
-                                                                <button
-                                                                    onClick={() =>
-                                                                        deleteSession(session.id)
-                                                                    }
-                                                                    className="text-xs text-slate-400 hover:text-rose-500"
-                                                                >
-                                                                    Delete
-                                                                </button>
-                                                            </div>
-
-                                                        </div>
-                                                    ))
+                                                {session.notes && (
+                                                    <p className="mt-3 text-sm leading-6 text-slate-500">
+                                                        {session.notes}
+                                                    </p>
                                                 )}
 
                                             </div>
-                                        </div>
-                                    );
-                                })}
 
+                                            <div className="text-right">
+                                                <p className="font-semibold text-slate-800">
+                                                    {formatDuration(
+                                                        session.duration_minutes
+                                                    )}
+                                                </p>
+
+                                                <button
+                                                    onClick={() =>
+                                                        handleDelete(session.id)
+                                                    }
+                                                    className="mt-2 text-xs font-medium text-slate-400 hover:text-red-600"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
+
+                                        </div>
+                                    </article>
+                                ))}
                             </div>
-                        </section>
+                        )}
 
                     </div>
                 </section>
             </div>
         </main>
+    );
+}
+
+function StatCard({
+    label,
+    value,
+}: {
+    label: string;
+    value: string;
+}) {
+    return (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm text-slate-500">
+                {label}
+            </p>
+
+            <p className="mt-2 text-2xl font-bold">
+                {value}
+            </p>
+        </div>
     );
 }
 
@@ -450,31 +582,16 @@ function NavItem({
     return (
         <Link
             href={href}
-            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${active
+            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${active
                 ? "bg-white/10 text-white"
                 : "text-slate-400 hover:bg-white/5 hover:text-white"
                 }`}
         >
-            <span className="flex w-5 justify-center">{icon}</span>
+            <span className="flex w-5 justify-center text-base">
+                {icon}
+            </span>
+
             {label}
         </Link>
-    );
-}
-
-function Stat({
-    label,
-    value,
-    detail,
-}: {
-    label: string;
-    value: string;
-    detail: string;
-}) {
-    return (
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">{label}</p>
-            <p className="mt-3 text-2xl font-bold">{value}</p>
-            <p className="mt-1 text-xs text-slate-400">{detail}</p>
-        </div>
     );
 }
