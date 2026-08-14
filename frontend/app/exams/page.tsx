@@ -1,109 +1,155 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
-type Exam = {
-    id: number;
-    subject: string;
-    type: string;
-    date: string;
-    progress: number;
-};
+import {
+    createExam,
+    deleteExam,
+    getExams,
+    type Exam,
+} from "../../src/services/exams";
 
-const initialExams: Exam[] = [
-    {
-        id: 1,
-        subject: "Criminal Law",
-        type: "Written Exam",
-        date: "2026-08-28",
-        progress: 72,
-    },
-    {
-        id: 2,
-        subject: "Civil Litigation",
-        type: "Written Exam",
-        date: "2026-09-10",
-        progress: 65,
-    },
-    {
-        id: 3,
-        subject: "Evidence",
-        type: "Written Exam",
-        date: "2026-09-18",
-        progress: 50,
-    },
-    {
-        id: 4,
-        subject: "Professional Conduct",
-        type: "Written Exam",
-        date: "2026-09-25",
-        progress: 80,
-    },
-    {
-        id: 5,
-        subject: "Advocacy",
-        type: "Practical Assessment",
-        date: "2026-10-02",
-        progress: 60,
-    },
-];
-
-function daysUntil(date: string) {
-    const today = new Date("2026-08-14");
-    const examDate = new Date(date);
-
-    return Math.ceil(
-        (examDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-    );
-}
-
-function formatDate(date: string) {
-    return new Date(date).toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-    });
-}
+import {
+    getSubjects,
+    type Subject,
+} from "../../src/services/subjects";
 
 export default function ExamsPage() {
-    const [exams, setExams] = useState(initialExams);
-    const [filter, setFilter] = useState<"all" | "upcoming">("all");
+    const [exams, setExams] = useState<Exam[]>([]);
+    const [subjects, setSubjects] = useState<Subject[]>([]);
+
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
     const [showForm, setShowForm] = useState(false);
 
-    const [subject, setSubject] = useState("");
-    const [type, setType] = useState("Written Exam");
-    const [date, setDate] = useState("");
+    const [name, setName] = useState("");
+    const [subjectId, setSubjectId] = useState("");
+    const [examDate, setExamDate] = useState("");
+    const [examType, setExamType] = useState("");
+    const [notes, setNotes] = useState("");
 
-    const visibleExams =
-        filter === "upcoming"
-            ? exams.filter((exam) => daysUntil(exam.date) >= 0)
-            : exams;
+    useEffect(() => {
+        loadData();
+    }, []);
 
-    function addExam(e: React.FormEvent) {
-        e.preventDefault();
+    async function loadData() {
+        try {
+            setLoading(true);
+            setError(null);
 
-        if (!subject || !date) return;
+            const [examData, subjectData] = await Promise.all([
+                getExams(),
+                getSubjects(),
+            ]);
 
-        setExams((current) => [
-            ...current,
-            {
-                id: Date.now(),
-                subject,
-                type,
-                date,
-                progress: 0,
-            },
-        ]);
+            setExams(examData);
+            setSubjects(subjectData);
 
-        setSubject("");
-        setDate("");
-        setType("Written Exam");
-        setShowForm(false);
+            if (subjectData.length > 0) {
+                setSubjectId(String(subjectData[0].id));
+            }
+        } catch (err) {
+            console.error(err);
+            setError("Unable to load exams.");
+        } finally {
+            setLoading(false);
+        }
     }
 
-    function deleteExam(id: number) {
-        setExams((current) => current.filter((exam) => exam.id !== id));
+    async function handleAddExam(
+        event: React.FormEvent<HTMLFormElement>
+    ) {
+        event.preventDefault();
+
+        if (!name.trim() || !subjectId || !examDate) {
+            setError(
+                "Please provide a subject, exam name and exam date."
+            );
+            return;
+        }
+
+        try {
+            setError(null);
+
+            const newExam = await createExam({
+                subject_id: Number(subjectId),
+                name: name.trim(),
+                exam_date: examDate,
+                exam_type: examType.trim() || undefined,
+                notes: notes.trim() || undefined,
+            });
+
+            setExams((current) =>
+                [...current, newExam].sort(
+                    (a, b) =>
+                        new Date(a.exam_date).getTime() -
+                        new Date(b.exam_date).getTime()
+                )
+            );
+
+            setName("");
+            setExamDate("");
+            setExamType("");
+            setNotes("");
+            setShowForm(false);
+        } catch (err) {
+            console.error(err);
+            setError("Unable to create exam.");
+        }
+    }
+
+    async function handleDeleteExam(id: number) {
+        const confirmed = window.confirm(
+            "Are you sure you want to delete this exam?"
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            setError(null);
+
+            await deleteExam(id);
+
+            setExams((current) =>
+                current.filter((exam) => exam.id !== id)
+            );
+        } catch (err) {
+            console.error(err);
+            setError("Unable to delete exam.");
+        }
+    }
+
+    function getSubjectName(subjectId: number) {
+        return (
+            subjects.find(
+                (subject) => subject.id === subjectId
+            )?.name || "Unknown subject"
+        );
+    }
+
+    function getDaysUntil(date: string) {
+        const today = new Date();
+        const exam = new Date(date);
+
+        today.setHours(0, 0, 0, 0);
+        exam.setHours(0, 0, 0, 0);
+
+        return Math.ceil(
+            (exam.getTime() - today.getTime()) /
+            (1000 * 60 * 60 * 24)
+        );
+    }
+
+    function formatDate(date: string) {
+        return new Date(date).toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+        });
     }
 
     return (
@@ -113,14 +159,22 @@ export default function ExamsPage() {
                 {/* Sidebar */}
                 <aside className="hidden w-64 flex-col bg-[#171b3a] text-white md:flex">
                     <div className="border-b border-white/10 px-6 py-6">
-                        <Link href="/" className="flex items-center gap-3">
+                        <Link
+                            href="/"
+                            className="flex items-center gap-3"
+                        >
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg font-bold text-[#171b3a]">
                                 B
                             </div>
 
                             <div>
-                                <h1 className="text-lg font-semibold">BarStudy</h1>
-                                <p className="text-xs text-slate-400">Bar Course Hub</p>
+                                <h1 className="text-lg font-semibold tracking-tight">
+                                    BarStudy
+                                </h1>
+
+                                <p className="text-xs text-slate-400">
+                                    Bar Course Hub
+                                </p>
                             </div>
                         </Link>
                     </div>
@@ -132,227 +186,357 @@ export default function ExamsPage() {
 
                         <div className="space-y-1">
                             <NavItem href="/" label="Dashboard" icon="⌂" />
-                            <NavItem href="/subjects" label="Subjects" icon="▤" />
-                            <NavItem href="/exams" label="Exams" icon="□" active />
-                            <NavItem href="/study" label="Study Planner" icon="◷" />
-                            <NavItem href="/tasks" label="Tasks" icon="✓" />
-                            <NavItem href="/resources" label="Resources" icon="▱" />
-                            <NavItem href="/inn" label="Inn of Court" icon="⚖" />
+                            <NavItem
+                                href="/subjects"
+                                label="Subjects"
+                                icon="▤"
+                            />
+                            <NavItem
+                                href="/exams"
+                                label="Exams"
+                                icon="□"
+                                active
+                            />
+                            <NavItem
+                                href="/study"
+                                label="Study Planner"
+                                icon="◷"
+                            />
+                            <NavItem
+                                href="/tasks"
+                                label="Tasks"
+                                icon="✓"
+                            />
+                            <NavItem
+                                href="/resources"
+                                label="Resources"
+                                icon="▱"
+                            />
+                            <NavItem
+                                href="/inn"
+                                label="Inn of Court"
+                                icon="⚖"
+                            />
                         </div>
                     </nav>
+
+                    <div className="border-t border-white/10 p-4">
+                        <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-500 text-sm font-semibold">
+                                C
+                            </div>
+
+                            <div className="min-w-0">
+                                <p className="truncate text-sm font-medium">
+                                    Chetan
+                                </p>
+
+                                <p className="truncate text-xs text-slate-500">
+                                    Bar Course Student
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </aside>
 
                 {/* Main */}
                 <section className="flex-1">
-                    <header className="flex min-h-20 items-center justify-between border-b border-slate-200 bg-white px-6 py-4 lg:px-10">
+
+                    <header className="flex h-20 items-center justify-between border-b border-slate-200 bg-white px-6 lg:px-10">
                         <div>
-                            <p className="text-sm text-slate-500">Your course</p>
-                            <h2 className="text-xl font-semibold">Exams</h2>
+                            <p className="text-sm text-slate-500">
+                                Assessments
+                            </p>
+
+                            <h2 className="text-xl font-semibold tracking-tight">
+                                Exams
+                            </h2>
                         </div>
 
                         <button
-                            onClick={() => setShowForm(!showForm)}
-                            className="rounded-xl bg-[#171b3a] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#222750]"
+                            onClick={() =>
+                                setShowForm((current) => !current)
+                            }
+                            className="rounded-xl bg-[#171b3a] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#222750]"
                         >
-                            + Add exam
+                            {showForm
+                                ? "Cancel"
+                                : "+ Add exam"}
                         </button>
                     </header>
 
-                    <div className="mx-auto max-w-[1500px] p-6 lg:p-10">
+                    <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
 
                         <div className="mb-8">
                             <p className="text-sm font-medium text-indigo-600">
-                                Assessment tracking
+                                Assessment schedule
                             </p>
 
                             <h1 className="mt-1 text-3xl font-bold tracking-tight">
                                 Your exams
                             </h1>
 
-                            <p className="mt-2 text-sm text-slate-500">
-                                Keep your assessment dates and preparation progress in one
-                                place.
+                            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                                Keep track of upcoming assessments and
+                                how they fit into your study schedule.
                             </p>
                         </div>
 
-                        {/* Add exam form */}
+                        {error && (
+                            <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4">
+                                <p className="text-sm text-red-600">
+                                    {error}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Add exam */}
                         {showForm && (
                             <form
-                                onSubmit={addExam}
-                                className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+                                onSubmit={handleAddExam}
+                                className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
                             >
-                                <h2 className="font-semibold">Add an exam</h2>
+                                <h2 className="text-lg font-semibold">
+                                    Add an exam
+                                </h2>
 
-                                <div className="mt-5 grid gap-4 md:grid-cols-3">
+                                <div className="mt-5 grid gap-5 md:grid-cols-2">
+
                                     <div>
-                                        <label className="text-xs font-medium text-slate-600">
+                                        <label className="text-sm font-medium text-slate-700">
                                             Subject
                                         </label>
 
-                                        <input
-                                            value={subject}
-                                            onChange={(e) => setSubject(e.target.value)}
-                                            placeholder="e.g. Contract Law"
-                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-500"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-xs font-medium text-slate-600">
-                                            Assessment type
-                                        </label>
-
                                         <select
-                                            value={type}
-                                            onChange={(e) => setType(e.target.value)}
-                                            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-500"
+                                            value={subjectId}
+                                            onChange={(e) =>
+                                                setSubjectId(
+                                                    e.target.value
+                                                )
+                                            }
+                                            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
                                         >
-                                            <option>Written Exam</option>
-                                            <option>Practical Assessment</option>
-                                            <option>Oral Assessment</option>
-                                            <option>Mock Exam</option>
-                                            <option>Other</option>
+                                            {subjects.map(
+                                                (subject) => (
+                                                    <option
+                                                        key={
+                                                            subject.id
+                                                        }
+                                                        value={
+                                                            subject.id
+                                                        }
+                                                    >
+                                                        {
+                                                            subject.name
+                                                        }
+                                                    </option>
+                                                )
+                                            )}
                                         </select>
                                     </div>
 
                                     <div>
-                                        <label className="text-xs font-medium text-slate-600">
+                                        <label className="text-sm font-medium text-slate-700">
+                                            Exam name
+                                        </label>
+
+                                        <input
+                                            value={name}
+                                            onChange={(e) =>
+                                                setName(
+                                                    e.target.value
+                                                )
+                                            }
+                                            placeholder="Criminal Law Final Examination"
+                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-sm font-medium text-slate-700">
                                             Exam date
                                         </label>
 
                                         <input
                                             type="date"
-                                            value={date}
-                                            onChange={(e) => setDate(e.target.value)}
-                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-500"
+                                            value={examDate}
+                                            onChange={(e) =>
+                                                setExamDate(
+                                                    e.target.value
+                                                )
+                                            }
+                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-sm font-medium text-slate-700">
+                                            Exam type
+                                        </label>
+
+                                        <input
+                                            value={examType}
+                                            onChange={(e) =>
+                                                setExamType(
+                                                    e.target.value
+                                                )
+                                            }
+                                            placeholder="Written, oral, advocacy..."
+                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
+                                        />
+                                    </div>
+
+                                    <div className="md:col-span-2">
+                                        <label className="text-sm font-medium text-slate-700">
+                                            Notes
+                                        </label>
+
+                                        <textarea
+                                            value={notes}
+                                            onChange={(e) =>
+                                                setNotes(
+                                                    e.target.value
+                                                )
+                                            }
+                                            rows={3}
+                                            placeholder="Optional notes..."
+                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
                                         />
                                     </div>
                                 </div>
 
-                                <div className="mt-5 flex gap-3">
+                                <div className="mt-5 flex justify-end">
                                     <button
                                         type="submit"
-                                        className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700"
+                                        className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700"
                                     >
-                                        Add exam
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowForm(false)}
-                                        className="rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-600"
-                                    >
-                                        Cancel
+                                        Save exam
                                     </button>
                                 </div>
                             </form>
                         )}
 
-                        {/* Filters */}
-                        <div className="mb-5 flex gap-2">
-                            <button
-                                onClick={() => setFilter("all")}
-                                className={`rounded-lg px-3 py-2 text-sm font-medium ${filter === "all"
-                                    ? "bg-[#171b3a] text-white"
-                                    : "bg-white text-slate-500"
-                                    }`}
-                            >
-                                All exams
-                            </button>
+                        {/* Loading */}
+                        {loading && (
+                            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+                                <p className="text-sm text-slate-500">
+                                    Loading exams...
+                                </p>
+                            </div>
+                        )}
 
-                            <button
-                                onClick={() => setFilter("upcoming")}
-                                className={`rounded-lg px-3 py-2 text-sm font-medium ${filter === "upcoming"
-                                    ? "bg-[#171b3a] text-white"
-                                    : "bg-white text-slate-500"
-                                    }`}
-                            >
-                                Upcoming
-                            </button>
-                        </div>
+                        {/* Empty */}
+                        {!loading && exams.length === 0 && (
+                            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+                                <h2 className="font-semibold text-slate-800">
+                                    No exams yet
+                                </h2>
+
+                                <p className="mt-2 text-sm text-slate-500">
+                                    Add your first assessment to
+                                    start building your exam schedule.
+                                </p>
+                            </div>
+                        )}
 
                         {/* Exams */}
-                        <div className="space-y-4">
-                            {visibleExams.map((exam) => {
-                                const days = daysUntil(exam.date);
+                        {!loading && exams.length > 0 && (
+                            <div className="space-y-4">
+                                {exams.map((exam) => {
+                                    const days = getDaysUntil(
+                                        exam.exam_date
+                                    );
 
-                                return (
-                                    <article
-                                        key={exam.id}
-                                        className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-                                    >
-                                        <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+                                    const upcoming = days >= 0;
 
-                                            <div className="flex items-center gap-4">
-                                                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-                                                    □
+                                    return (
+                                        <article
+                                            key={exam.id}
+                                            className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+                                        >
+                                            <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
+
+                                                <div className="flex items-start gap-4">
+                                                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                                                        □
+                                                    </div>
+
+                                                    <div>
+                                                        <p className="text-xs font-medium uppercase tracking-wide text-indigo-600">
+                                                            {getSubjectName(
+                                                                exam.subject_id
+                                                            )}
+                                                        </p>
+
+                                                        <h2 className="mt-1 text-lg font-semibold">
+                                                            {exam.name}
+                                                        </h2>
+
+                                                        {exam.exam_type && (
+                                                            <p className="mt-1 text-sm text-slate-500">
+                                                                {
+                                                                    exam.exam_type
+                                                                }
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                 </div>
 
-                                                <div>
-                                                    <h2 className="font-semibold">
-                                                        {exam.subject}
-                                                    </h2>
+                                                <div className="flex items-center gap-6">
+                                                    <div>
+                                                        <p className="text-xs text-slate-400">
+                                                            Exam date
+                                                        </p>
 
-                                                    <p className="mt-1 text-xs text-slate-500">
-                                                        {exam.type} · {formatDate(exam.date)}
-                                                    </p>
-                                                </div>
-                                            </div>
+                                                        <p className="mt-1 font-semibold">
+                                                            {formatDate(
+                                                                exam.exam_date
+                                                            )}
+                                                        </p>
+                                                    </div>
 
-                                            <div className="flex items-center gap-6">
-                                                <div className="text-right">
-                                                    <p
-                                                        className={`text-xl font-bold ${days <= 14
-                                                            ? "text-rose-500"
-                                                            : "text-slate-900"
-                                                            }`}
+                                                    <div>
+                                                        <p className="text-xs text-slate-400">
+                                                            Status
+                                                        </p>
+
+                                                        <p
+                                                            className={`mt-1 font-semibold ${upcoming
+                                                                ? "text-indigo-600"
+                                                                : "text-slate-500"
+                                                                }`}
+                                                        >
+                                                            {upcoming
+                                                                ? days === 0
+                                                                    ? "Today"
+                                                                    : `${days} days`
+                                                                : "Past"}
+                                                        </p>
+                                                    </div>
+
+                                                    <button
+                                                        onClick={() =>
+                                                            handleDeleteExam(
+                                                                exam.id
+                                                            )
+                                                        }
+                                                        className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-red-50 hover:text-red-600"
                                                     >
-                                                        {days >= 0 ? `${days} days` : "Past"}
-                                                    </p>
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </div>
 
-                                                    <p className="text-xs text-slate-400">
-                                                        {days >= 0 ? "remaining" : "completed"}
+                                            {exam.notes && (
+                                                <div className="mt-5 border-t border-slate-100 pt-4">
+                                                    <p className="text-sm text-slate-500">
+                                                        {exam.notes}
                                                     </p>
                                                 </div>
-
-                                                <button
-                                                    onClick={() => deleteExam(exam.id)}
-                                                    className="text-xs text-slate-400 hover:text-rose-500"
-                                                >
-                                                    Delete
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div className="mt-5">
-                                            <div className="mb-2 flex justify-between text-xs">
-                                                <span className="text-slate-500">
-                                                    Preparation
-                                                </span>
-
-                                                <span className="font-medium text-slate-700">
-                                                    {exam.progress}%
-                                                </span>
-                                            </div>
-
-                                            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                                                <div
-                                                    className="h-full rounded-full bg-indigo-500"
-                                                    style={{ width: `${exam.progress}%` }}
-                                                />
-                                            </div>
-                                        </div>
-                                    </article>
-                                );
-                            })}
-                        </div>
-
-                        {visibleExams.length === 0 && (
-                            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-                                <p className="font-medium">No exams found</p>
-                                <p className="mt-1 text-sm text-slate-400">
-                                    Add an exam to start tracking it.
-                                </p>
+                                            )}
+                                        </article>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
@@ -376,12 +560,15 @@ function NavItem({
     return (
         <Link
             href={href}
-            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${active
+            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${active
                 ? "bg-white/10 text-white"
                 : "text-slate-400 hover:bg-white/5 hover:text-white"
                 }`}
         >
-            <span className="flex w-5 justify-center">{icon}</span>
+            <span className="flex w-5 justify-center text-base">
+                {icon}
+            </span>
+
             {label}
         </Link>
     );

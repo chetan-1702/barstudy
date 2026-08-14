@@ -1,4 +1,5 @@
 from sqlalchemy import Boolean, Column, Integer, String
+from sqlalchemy.orm import relationship
 
 from backend.app.db.database import Base
 
@@ -26,4 +27,10 @@ class User(Base):
     inn_name = Column(
         String(100),
         nullable=True,
+    )
+
+    subjects = relationship(
+        "Subject",
+        back_populates="user",
+        cascade="all, delete-orphan",
     )

@@ -1,61 +1,86 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
-const subjects = [
-    {
-        name: "Criminal Law",
-        code: "CRIM",
-        exam: "28 Aug 2026",
-        days: 14,
-        progress: 72,
-        hours: "6.5h",
-        topics: "12 / 17",
-        tasks: 4,
-    },
-    {
-        name: "Civil Litigation",
-        code: "CIVIL",
-        exam: "10 Sep 2026",
-        days: 27,
-        progress: 65,
-        hours: "4.5h",
-        topics: "9 / 14",
-        tasks: 3,
-    },
-    {
-        name: "Evidence",
-        code: "EVID",
-        exam: "18 Sep 2026",
-        days: 35,
-        progress: 50,
-        hours: "3.5h",
-        topics: "7 / 14",
-        tasks: 5,
-    },
-    {
-        name: "Professional Conduct",
-        code: "PROF",
-        exam: "25 Sep 2026",
-        days: 42,
-        progress: 80,
-        hours: "2.0h",
-        topics: "16 / 20",
-        tasks: 2,
-    },
-    {
-        name: "Advocacy",
-        code: "ADV",
-        exam: "2 Oct 2026",
-        days: 49,
-        progress: 60,
-        hours: "2.0h",
-        topics: "6 / 10",
-        tasks: 3,
-    },
-];
+import {
+    createSubject,
+    deleteSubject,
+    getSubjects,
+    type Subject,
+} from "../../src/services/subjects";
 
 export default function SubjectsPage() {
+    const [subjects, setSubjects] = useState<Subject[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        loadSubjects();
+    }, []);
+
+    async function loadSubjects() {
+        try {
+            setLoading(true);
+            setError(null);
+
+            const data = await getSubjects();
+            setSubjects(data);
+        } catch (err) {
+            console.error(err);
+            setError("Unable to load subjects.");
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function handleAddSubject() {
+        const name = window.prompt("Subject name:");
+
+        if (!name?.trim()) {
+            return;
+        }
+
+        const code = window.prompt("Subject code (optional):");
+
+        try {
+            setError(null);
+
+            const newSubject = await createSubject({
+                name: name.trim(),
+                code: code?.trim() || undefined,
+            });
+
+            setSubjects((current) => [...current, newSubject]);
+        } catch (err) {
+            console.error(err);
+            setError("Unable to create subject.");
+        }
+    }
+
+    async function handleDeleteSubject(id: number) {
+        const confirmed = window.confirm(
+            "Are you sure you want to delete this subject?"
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            setError(null);
+
+            await deleteSubject(id);
+
+            setSubjects((current) =>
+                current.filter((subject) => subject.id !== id)
+            );
+        } catch (err) {
+            console.error(err);
+            setError("Unable to delete subject.");
+        }
+    }
+
     return (
         <main className="min-h-screen bg-[#f6f7fb] text-slate-900">
             <div className="flex min-h-screen">
@@ -72,6 +97,7 @@ export default function SubjectsPage() {
                                 <h1 className="text-lg font-semibold tracking-tight">
                                     BarStudy
                                 </h1>
+
                                 <p className="text-xs text-slate-400">
                                     Bar Course Hub
                                 </p>
@@ -102,7 +128,10 @@ export default function SubjectsPage() {
                             </div>
 
                             <div className="min-w-0">
-                                <p className="truncate text-sm font-medium">Chetan</p>
+                                <p className="truncate text-sm font-medium">
+                                    Chetan
+                                </p>
+
                                 <p className="truncate text-xs text-slate-500">
                                     Bar Course Student
                                 </p>
@@ -126,7 +155,10 @@ export default function SubjectsPage() {
                             </h2>
                         </div>
 
-                        <button className="rounded-xl bg-[#171b3a] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#222750]">
+                        <button
+                            onClick={handleAddSubject}
+                            className="rounded-xl bg-[#171b3a] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#222750]"
+                        >
                             + Add subject
                         </button>
                     </header>
@@ -149,119 +181,154 @@ export default function SubjectsPage() {
                             </p>
                         </div>
 
+                        {/* Error */}
+                        {error && (
+                            <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4">
+                                <p className="text-sm text-red-600">
+                                    {error}
+                                </p>
+                            </div>
+                        )}
+
                         {/* Summary */}
                         <div className="mb-8 grid gap-4 sm:grid-cols-3">
                             <SummaryCard
                                 label="Subjects"
-                                value="5"
+                                value={loading ? "—" : String(subjects.length)}
                                 detail="Currently enrolled"
                             />
 
                             <SummaryCard
                                 label="Average progress"
-                                value="65%"
-                                detail="Across all subjects"
+                                value="—"
+                                detail="Available once study tracking is connected"
                             />
 
                             <SummaryCard
                                 label="Study this week"
-                                value="18.5h"
-                                detail="Across all subjects"
+                                value="—"
+                                detail="Available once study sessions are connected"
                             />
                         </div>
 
-                        {/* Subject cards */}
-                        <div className="grid gap-5 lg:grid-cols-2">
+                        {/* Loading */}
+                        {loading && (
+                            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+                                <p className="text-sm text-slate-500">
+                                    Loading subjects...
+                                </p>
+                            </div>
+                        )}
 
-                            {subjects.map((subject) => (
-                                <article
-                                    key={subject.code}
-                                    className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+                        {/* Empty state */}
+                        {!loading && subjects.length === 0 && (
+                            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+                                <h2 className="font-semibold text-slate-800">
+                                    No subjects yet
+                                </h2>
+
+                                <p className="mt-2 text-sm text-slate-500">
+                                    Add your first Bar course subject to get started.
+                                </p>
+
+                                <button
+                                    onClick={handleAddSubject}
+                                    className="mt-5 rounded-xl bg-[#171b3a] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#222750]"
                                 >
+                                    + Add subject
+                                </button>
+                            </div>
+                        )}
 
-                                    {/* Subject header */}
-                                    <div className="flex items-start justify-between gap-4">
+                        {/* Subject cards */}
+                        {!loading && subjects.length > 0 && (
+                            <div className="grid gap-5 lg:grid-cols-2">
+                                {subjects.map((subject) => (
+                                    <article
+                                        key={subject.id}
+                                        className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+                                    >
+                                        {/* Subject header */}
+                                        <div className="flex items-start justify-between gap-4">
 
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-sm font-bold text-indigo-600">
-                                                {subject.code}
+                                            <div className="flex items-center gap-4">
+                                                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-sm font-bold text-indigo-600">
+                                                    {subject.code || "LAW"}
+                                                </div>
+
+                                                <div>
+                                                    <h2 className="font-semibold">
+                                                        {subject.name}
+                                                    </h2>
+
+                                                    <p className="mt-1 text-xs text-slate-500">
+                                                        Exam: Not set yet
+                                                    </p>
+                                                </div>
                                             </div>
 
-                                            <div>
-                                                <h2 className="font-semibold">
-                                                    {subject.name}
-                                                </h2>
+                                            <div className="text-right">
+                                                <p className="text-xl font-bold">
+                                                    —
+                                                </p>
 
-                                                <p className="mt-1 text-xs text-slate-500">
-                                                    Exam: {subject.exam}
+                                                <p className="text-xs text-slate-400">
+                                                    progress
                                                 </p>
                                             </div>
                                         </div>
 
-                                        <div className="text-right">
-                                            <p className="text-xl font-bold">
-                                                {subject.progress}%
-                                            </p>
-
-                                            <p className="text-xs text-slate-400">
-                                                prepared
-                                            </p>
+                                        {/* Progress */}
+                                        <div className="mt-5">
+                                            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                                                <div
+                                                    className="h-full rounded-full bg-indigo-500"
+                                                    style={{ width: "0%" }}
+                                                />
+                                            </div>
                                         </div>
-                                    </div>
 
-                                    {/* Progress */}
-                                    <div className="mt-5">
-                                        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                                            <div
-                                                className="h-full rounded-full bg-indigo-500"
-                                                style={{ width: `${subject.progress}%` }}
+                                        {/* Details */}
+                                        <div className="mt-6 grid grid-cols-3 gap-3">
+                                            <Detail
+                                                label="Exam"
+                                                value="Not set"
+                                            />
+
+                                            <Detail
+                                                label="Study"
+                                                value="0h"
+                                            />
+
+                                            <Detail
+                                                label="Topics"
+                                                value="—"
                                             />
                                         </div>
-                                    </div>
 
-                                    {/* Details */}
-                                    <div className="mt-6 grid grid-cols-3 gap-3">
+                                        {/* Footer */}
+                                        <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-5">
+                                            <p className="text-xs text-slate-400">
+                                                No tasks yet
+                                            </p>
 
-                                        <Detail
-                                            label="Exam"
-                                            value={`${subject.days} days`}
-                                        />
-
-                                        <Detail
-                                            label="Study"
-                                            value={subject.hours}
-                                        />
-
-                                        <Detail
-                                            label="Topics"
-                                            value={subject.topics}
-                                        />
-
-                                    </div>
-
-                                    {/* Footer */}
-                                    <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-5">
-
-                                        <p className="text-xs text-slate-400">
-                                            {subject.tasks} active tasks
-                                        </p>
-
-                                        <button className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200">
-                                            Open subject →
-                                        </button>
-
-                                    </div>
-
-                                </article>
-                            ))}
-
-                        </div>
+                                            <button
+                                                onClick={() =>
+                                                    handleDeleteSubject(subject.id)
+                                                }
+                                                className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-red-50 hover:text-red-600"
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </article>
+                                ))}
+                            </div>
+                        )}
 
                         {/* Future import */}
                         <section className="mt-8 rounded-2xl border border-dashed border-slate-300 bg-white p-6">
-
                             <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-
                                 <div>
                                     <h2 className="font-semibold">
                                         Import your timetable
@@ -280,9 +347,7 @@ export default function SubjectsPage() {
                                 >
                                     Coming later
                                 </button>
-
                             </div>
-
                         </section>
 
                     </div>
