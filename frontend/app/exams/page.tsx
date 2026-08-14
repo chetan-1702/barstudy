@@ -1,575 +1,550 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-
-import {
-    createExam,
-    deleteExam,
-    getExams,
-    type Exam,
-} from "../../src/services/exams";
-
-import {
-    getSubjects,
-    type Subject,
-} from "../../src/services/subjects";
-
-export default function ExamsPage() {
-    const [exams, setExams] = useState<Exam[]>([]);
-    const [subjects, setSubjects] = useState<Subject[]>([]);
-
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    const [showForm, setShowForm] = useState(false);
-
-    const [name, setName] = useState("");
-    const [subjectId, setSubjectId] = useState("");
-    const [examDate, setExamDate] = useState("");
-    const [examType, setExamType] = useState("");
-    const [notes, setNotes] = useState("");
-
-    useEffect(() => {
-        loadData();
-    }, []);
-
-    async function loadData() {
-        try {
-            setLoading(true);
-            setError(null);
-
-            const [examData, subjectData] = await Promise.all([
-                getExams(),
-                getSubjects(),
-            ]);
-
-            setExams(examData);
-            setSubjects(subjectData);
-
-            if (subjectData.length > 0) {
-                setSubjectId(String(subjectData[0].id));
-            }
-        } catch (err) {
-            console.error(err);
-            setError("Unable to load exams.");
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    async function handleAddExam(
-        event: React.FormEvent<HTMLFormElement>
-    ) {
-        event.preventDefault();
-
-        if (!name.trim() || !subjectId || !examDate) {
-            setError(
-                "Please provide a subject, exam name and exam date."
-            );
-            return;
-        }
-
-        try {
-            setError(null);
-
-            const newExam = await createExam({
-                subject_id: Number(subjectId),
-                name: name.trim(),
-                exam_date: examDate,
-                exam_type: examType.trim() || undefined,
-                notes: notes.trim() || undefined,
-            });
-
-            setExams((current) =>
-                [...current, newExam].sort(
-                    (a, b) =>
-                        new Date(a.exam_date).getTime() -
-                        new Date(b.exam_date).getTime()
-                )
-            );
-
-            setName("");
-            setExamDate("");
-            setExamType("");
-            setNotes("");
-            setShowForm(false);
-        } catch (err) {
-            console.error(err);
-            setError("Unable to create exam.");
-        }
-    }
-
-    async function handleDeleteExam(id: number) {
-        const confirmed = window.confirm(
-            "Are you sure you want to delete this exam?"
-        );
-
-        if (!confirmed) {
-            return;
-        }
-
-        try {
-            setError(null);
-
-            await deleteExam(id);
-
-            setExams((current) =>
-                current.filter((exam) => exam.id !== id)
-            );
-        } catch (err) {
-            console.error(err);
-            setError("Unable to delete exam.");
-        }
-    }
-
-    function getSubjectName(subjectId: number) {
-        return (
-            subjects.find(
-                (subject) => subject.id === subjectId
-            )?.name || "Unknown subject"
-        );
-    }
-
-    function getDaysUntil(date: string) {
-        const today = new Date();
-        const exam = new Date(date);
-
-        today.setHours(0, 0, 0, 0);
-        exam.setHours(0, 0, 0, 0);
-
-        return Math.ceil(
-            (exam.getTime() - today.getTime()) /
-            (1000 * 60 * 60 * 24)
-        );
-    }
-
-    function formatDate(date: string) {
-        return new Date(date).toLocaleDateString("en-GB", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-        });
-    }
-
-    return (
-        <main className="min-h-screen bg-[#f6f7fb] text-slate-900">
-            <div className="flex min-h-screen">
-
-                {/* Sidebar */}
-                <aside className="hidden w-64 flex-col bg-[#171b3a] text-white md:flex">
-                    <div className="border-b border-white/10 px-6 py-6">
-                        <Link
-                            href="/"
-                            className="flex items-center gap-3"
-                        >
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg font-bold text-[#171b3a]">
-                                B
-                            </div>
-
-                            <div>
-                                <h1 className="text-lg font-semibold tracking-tight">
-                                    BarStudy
-                                </h1>
-
-                                <p className="text-xs text-slate-400">
-                                    Bar Course Hub
-                                </p>
-                            </div>
-                        </Link>
-                    </div>
-
-                    <nav className="flex-1 px-4 py-6">
-                        <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-                            Workspace
-                        </p>
-
-                        <div className="space-y-1">
-                            <NavItem href="/" label="Dashboard" icon="⌂" />
-                            <NavItem
-                                href="/subjects"
-                                label="Subjects"
-                                icon="▤"
-                            />
-                            <NavItem
-                                href="/exams"
-                                label="Exams"
-                                icon="□"
-                                active
-                            />
-                            <NavItem
-                                href="/study"
-                                label="Study Planner"
-                                icon="◷"
-                            />
-                            <NavItem
-                                href="/tasks"
-                                label="Tasks"
-                                icon="✓"
-                            />
-                            <NavItem
-                                href="/resources"
-                                label="Resources"
-                                icon="▱"
-                            />
-                            <NavItem
-                                href="/inn"
-                                label="Inn of Court"
-                                icon="⚖"
-                            />
-                        </div>
-                    </nav>
-
-                    <div className="border-t border-white/10 p-4">
-                        <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-500 text-sm font-semibold">
-                                C
-                            </div>
-
-                            <div className="min-w-0">
-                                <p className="truncate text-sm font-medium">
-                                    Chetan
-                                </p>
-
-                                <p className="truncate text-xs text-slate-500">
-                                    Bar Course Student
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </aside>
-
-                {/* Main */}
-                <section className="flex-1">
-
-                    <header className="flex h-20 items-center justify-between border-b border-slate-200 bg-white px-6 lg:px-10">
-                        <div>
-                            <p className="text-sm text-slate-500">
-                                Assessments
-                            </p>
-
-                            <h2 className="text-xl font-semibold tracking-tight">
-                                Exams
-                            </h2>
-                        </div>
-
-                        <button
-                            onClick={() =>
-                                setShowForm((current) => !current)
-                            }
-                            className="rounded-xl bg-[#171b3a] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#222750]"
-                        >
-                            {showForm
-                                ? "Cancel"
-                                : "+ Add exam"}
-                        </button>
-                    </header>
-
-                    <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
-
-                        <div className="mb-8">
-                            <p className="text-sm font-medium text-indigo-600">
-                                Assessment schedule
-                            </p>
-
-                            <h1 className="mt-1 text-3xl font-bold tracking-tight">
-                                Your exams
-                            </h1>
-
-                            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                                Keep track of upcoming assessments and
-                                how they fit into your study schedule.
-                            </p>
-                        </div>
-
-                        {error && (
-                            <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4">
-                                <p className="text-sm text-red-600">
-                                    {error}
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Add exam */}
-                        {showForm && (
-                            <form
-                                onSubmit={handleAddExam}
-                                className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-                            >
-                                <h2 className="text-lg font-semibold">
-                                    Add an exam
-                                </h2>
-
-                                <div className="mt-5 grid gap-5 md:grid-cols-2">
-
-                                    <div>
-                                        <label className="text-sm font-medium text-slate-700">
-                                            Subject
-                                        </label>
-
-                                        <select
-                                            value={subjectId}
-                                            onChange={(e) =>
-                                                setSubjectId(
-                                                    e.target.value
-                                                )
-                                            }
-                                            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
-                                        >
-                                            {subjects.map(
-                                                (subject) => (
-                                                    <option
-                                                        key={
-                                                            subject.id
-                                                        }
-                                                        value={
-                                                            subject.id
-                                                        }
-                                                    >
-                                                        {
-                                                            subject.name
-                                                        }
-                                                    </option>
-                                                )
-                                            )}
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="text-sm font-medium text-slate-700">
-                                            Exam name
-                                        </label>
-
-                                        <input
-                                            value={name}
-                                            onChange={(e) =>
-                                                setName(
-                                                    e.target.value
-                                                )
-                                            }
-                                            placeholder="Criminal Law Final Examination"
-                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-sm font-medium text-slate-700">
-                                            Exam date
-                                        </label>
-
-                                        <input
-                                            type="date"
-                                            value={examDate}
-                                            onChange={(e) =>
-                                                setExamDate(
-                                                    e.target.value
-                                                )
-                                            }
-                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-sm font-medium text-slate-700">
-                                            Exam type
-                                        </label>
-
-                                        <input
-                                            value={examType}
-                                            onChange={(e) =>
-                                                setExamType(
-                                                    e.target.value
-                                                )
-                                            }
-                                            placeholder="Written, oral, advocacy..."
-                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
-                                        />
-                                    </div>
-
-                                    <div className="md:col-span-2">
-                                        <label className="text-sm font-medium text-slate-700">
-                                            Notes
-                                        </label>
-
-                                        <textarea
-                                            value={notes}
-                                            onChange={(e) =>
-                                                setNotes(
-                                                    e.target.value
-                                                )
-                                            }
-                                            rows={3}
-                                            placeholder="Optional notes..."
-                                            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-400"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="mt-5 flex justify-end">
-                                    <button
-                                        type="submit"
-                                        className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700"
-                                    >
-                                        Save exam
-                                    </button>
-                                </div>
-                            </form>
-                        )}
-
-                        {/* Loading */}
-                        {loading && (
-                            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
-                                <p className="text-sm text-slate-500">
-                                    Loading exams...
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Empty */}
-                        {!loading && exams.length === 0 && (
-                            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-                                <h2 className="font-semibold text-slate-800">
-                                    No exams yet
-                                </h2>
-
-                                <p className="mt-2 text-sm text-slate-500">
-                                    Add your first assessment to
-                                    start building your exam schedule.
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Exams */}
-                        {!loading && exams.length > 0 && (
-                            <div className="space-y-4">
-                                {exams.map((exam) => {
-                                    const days = getDaysUntil(
-                                        exam.exam_date
-                                    );
-
-                                    const upcoming = days >= 0;
-
-                                    return (
-                                        <article
-                                            key={exam.id}
-                                            className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-                                        >
-                                            <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
-
-                                                <div className="flex items-start gap-4">
-                                                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-                                                        □
-                                                    </div>
-
-                                                    <div>
-                                                        <p className="text-xs font-medium uppercase tracking-wide text-indigo-600">
-                                                            {getSubjectName(
-                                                                exam.subject_id
-                                                            )}
-                                                        </p>
-
-                                                        <h2 className="mt-1 text-lg font-semibold">
-                                                            {exam.name}
-                                                        </h2>
-
-                                                        {exam.exam_type && (
-                                                            <p className="mt-1 text-sm text-slate-500">
-                                                                {
-                                                                    exam.exam_type
-                                                                }
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex items-center gap-6">
-                                                    <div>
-                                                        <p className="text-xs text-slate-400">
-                                                            Exam date
-                                                        </p>
-
-                                                        <p className="mt-1 font-semibold">
-                                                            {formatDate(
-                                                                exam.exam_date
-                                                            )}
-                                                        </p>
-                                                    </div>
-
-                                                    <div>
-                                                        <p className="text-xs text-slate-400">
-                                                            Status
-                                                        </p>
-
-                                                        <p
-                                                            className={`mt-1 font-semibold ${upcoming
-                                                                ? "text-indigo-600"
-                                                                : "text-slate-500"
-                                                                }`}
-                                                        >
-                                                            {upcoming
-                                                                ? days === 0
-                                                                    ? "Today"
-                                                                    : `${days} days`
-                                                                : "Past"}
-                                                        </p>
-                                                    </div>
-
-                                                    <button
-                                                        onClick={() =>
-                                                            handleDeleteExam(
-                                                                exam.id
-                                                            )
-                                                        }
-                                                        className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-red-50 hover:text-red-600"
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {exam.notes && (
-                                                <div className="mt-5 border-t border-slate-100 pt-4">
-                                                    <p className="text-sm text-slate-500">
-                                                        {exam.notes}
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </article>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                </section>
-            </div>
-        </main>
-    );
+import { useParams } from "next/navigation";
+
+const API_URL = "http://localhost:8000";
+
+interface Exam {
+  id: number;
+  subject_id: number;
+  name: string;
+  exam_date: string;
+  exam_type: string | null;
+  notes: string | null;
+  created_at: string;
 }
 
-function NavItem({
-    href,
-    label,
-    icon,
-    active = false,
-}: {
-    href: string;
-    label: string;
-    icon: string;
-    active?: boolean;
-}) {
-    return (
-        <Link
-            href={href}
-            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${active
-                ? "bg-white/10 text-white"
-                : "text-slate-400 hover:bg-white/5 hover:text-white"
-                }`}
-        >
-            <span className="flex w-5 justify-center text-base">
-                {icon}
-            </span>
+interface Subject {
+  id: number;
+  name: string;
+  code: string | null;
+}
 
-            {label}
-        </Link>
+interface Task {
+  id: number;
+  title?: string;
+  name?: string;
+  status?: string;
+  completed?: boolean;
+}
+
+interface StudySession {
+  id: number;
+  subject_id: number;
+  title: string;
+  session_date: string;
+  duration_minutes: number;
+  notes?: string | null;
+}
+
+export default function ExamDetailPage() {
+  const params = useParams();
+  const examId = params.id;
+
+  const [exam, setExam] = useState<Exam | null>(null);
+  const [subject, setSubject] = useState<Subject | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [sessions, setSessions] = useState<StudySession[]>([]);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!examId) return;
+
+    loadExam();
+  }, [examId]);
+
+  async function loadExam() {
+    try {
+      setLoading(true);
+      setError("");
+
+      const examResponse = await fetch(
+        `${API_URL}/api/exams/${examId}`,
+        {
+          cache: "no-store",
+        }
+      );
+
+      if (!examResponse.ok) {
+        throw new Error("Exam not found");
+      }
+
+      const examData: Exam =
+        await examResponse.json();
+
+      setExam(examData);
+
+      const [
+        subjectResponse,
+        tasksResponse,
+        sessionsResponse,
+      ] = await Promise.all([
+        fetch(
+          `${API_URL}/api/subjects/${examData.subject_id}`,
+          {
+            cache: "no-store",
+          }
+        ),
+
+        fetch(`${API_URL}/api/tasks`, {
+          cache: "no-store",
+        }),
+
+        fetch(`${API_URL}/api/study-sessions`, {
+          cache: "no-store",
+        }),
+      ]);
+
+      if (subjectResponse.ok) {
+        setSubject(await subjectResponse.json());
+      }
+
+      if (tasksResponse.ok) {
+        const taskData = await tasksResponse.json();
+
+        setTasks(
+          taskData.filter(
+            (task: Task) =>
+              task.subject_id ===
+              examData.subject_id
+          )
+        );
+      }
+
+      if (sessionsResponse.ok) {
+        const sessionData =
+          await sessionsResponse.json();
+
+        setSessions(
+          sessionData.filter(
+            (session: StudySession) =>
+              session.subject_id ===
+              examData.subject_id
+          )
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load this exam.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const totalStudyMinutes = useMemo(() => {
+    return sessions.reduce(
+      (total, session) =>
+        total + session.duration_minutes,
+      0
     );
+  }, [sessions]);
+
+  const completedTasks = useMemo(() => {
+    return tasks.filter(
+      (task) =>
+        task.completed === true ||
+        task.status?.toLowerCase() === "completed"
+    ).length;
+  }, [tasks]);
+
+  const daysRemaining = useMemo(() => {
+    if (!exam) return 0;
+
+    const today = new Date();
+
+    today.setHours(0, 0, 0, 0);
+
+    const examDate = new Date(
+      `${exam.exam_date}T00:00:00`
+    );
+
+    return Math.ceil(
+      (examDate.getTime() - today.getTime()) /
+        (1000 * 60 * 60 * 24)
+    );
+  }, [exam]);
+
+  function formatDate(date: string) {
+    return new Date(
+      `${date}T00:00:00`
+    ).toLocaleDateString("en-GB", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  }
+
+  function formatDuration(minutes: number) {
+    const hours = Math.floor(minutes / 60);
+    const remaining = minutes % 60;
+
+    if (hours === 0) {
+      return `${remaining}m`;
+    }
+
+    if (remaining === 0) {
+      return `${hours}h`;
+    }
+
+    return `${hours}h ${remaining}m`;
+  }
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-[#f6f7fb] p-10">
+        <div className="mx-auto max-w-5xl">
+          <p className="text-sm text-slate-500">
+            Loading exam...
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (error || !exam) {
+    return (
+      <main className="min-h-screen bg-[#f6f7fb] p-10">
+        <div className="mx-auto max-w-5xl">
+
+          <Link
+            href="/exams"
+            className="text-sm text-indigo-600"
+          >
+            ← Back to exams
+          </Link>
+
+          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-6">
+            <p className="text-sm text-red-600">
+              {error || "Exam not found."}
+            </p>
+          </div>
+
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-[#f6f7fb]">
+
+      {/* Header */}
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto max-w-5xl px-6 py-6">
+
+          <Link
+            href="/exams"
+            className="text-sm text-slate-500 hover:text-slate-900"
+          >
+            ← Back to exams
+          </Link>
+
+          <div className="mt-6">
+
+            <p className="text-sm font-medium text-indigo-600">
+              {subject?.name || "Subject"}
+            </p>
+
+            <h1 className="mt-1 text-3xl font-bold tracking-tight">
+              {exam.name}
+            </h1>
+
+            <p className="mt-2 text-sm text-slate-500">
+              {formatDate(exam.exam_date)}
+              {exam.exam_type
+                ? ` · ${exam.exam_type}`
+                : ""}
+            </p>
+
+          </div>
+
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-5xl px-6 py-8">
+
+        {/* Countdown */}
+        <section className="rounded-2xl bg-[#171b3a] p-6 text-white shadow-sm">
+
+          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+
+            <div>
+              <p className="text-sm text-slate-300">
+                Time remaining
+              </p>
+
+              <p className="mt-1 text-3xl font-bold">
+                {daysRemaining < 0
+                  ? "Exam passed"
+                  : daysRemaining === 0
+                  ? "Today"
+                  : daysRemaining === 1
+                  ? "1 day"
+                  : `${daysRemaining} days`}
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+
+              <Link
+                href={`/tasks?subject=${exam.subject_id}`}
+                className="rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium hover:bg-white/20"
+              >
+                Add task
+              </Link>
+
+              <Link
+                href={`/study?subject=${exam.subject_id}`}
+                className="rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-[#171b3a] hover:bg-slate-100"
+              >
+                Log study
+              </Link>
+
+            </div>
+
+          </div>
+
+        </section>
+
+        {/* Stats */}
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+
+          <StatCard
+            label="Study time"
+            value={formatDuration(
+              totalStudyMinutes
+            )}
+          />
+
+          <StatCard
+            label="Tasks"
+            value={`${completedTasks}/${tasks.length}`}
+          />
+
+          <StatCard
+            label="Study sessions"
+            value={String(sessions.length)}
+          />
+
+        </div>
+
+        {/* Main grid */}
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+
+          {/* Tasks */}
+          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+
+              <div>
+                <h2 className="font-semibold">
+                  Study tasks
+                </h2>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  Tasks related to {subject?.name}
+                </p>
+              </div>
+
+              <Link
+                href={`/tasks?subject=${exam.subject_id}`}
+                className="text-sm font-medium text-indigo-600"
+              >
+                Add
+              </Link>
+
+            </div>
+
+            <div className="divide-y divide-slate-100">
+
+              {tasks.length === 0 ? (
+                <div className="px-6 py-10 text-center">
+
+                  <p className="font-medium">
+                    No tasks yet
+                  </p>
+
+                  <p className="mt-1 text-sm text-slate-500">
+                    Add study tasks to plan your
+                    preparation.
+                  </p>
+
+                </div>
+              ) : (
+                tasks.map((task) => {
+
+                  const completed =
+                    task.completed === true ||
+                    task.status?.toLowerCase() ===
+                      "completed";
+
+                  return (
+                    <div
+                      key={task.id}
+                      className="flex items-center gap-3 px-6 py-4"
+                    >
+
+                      <div
+                        className={`flex h-5 w-5 items-center justify-center rounded border ${
+                          completed
+                            ? "border-indigo-600 bg-indigo-600 text-white"
+                            : "border-slate-300"
+                        }`}
+                      >
+                        {completed && (
+                          <span className="text-xs">
+                            ✓
+                          </span>
+                        )}
+                      </div>
+
+                      <span
+                        className={`text-sm ${
+                          completed
+                            ? "text-slate-400 line-through"
+                            : "text-slate-700"
+                        }`}
+                      >
+                        {task.title ||
+                          task.name ||
+                          "Untitled task"}
+                      </span>
+
+                    </div>
+                  );
+                })
+              )}
+
+            </div>
+
+          </section>
+
+          {/* Study sessions */}
+          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+
+              <div>
+                <h2 className="font-semibold">
+                  Recent study
+                </h2>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  Your latest preparation
+                </p>
+              </div>
+
+              <Link
+                href={`/study?subject=${exam.subject_id}`}
+                className="text-sm font-medium text-indigo-600"
+              >
+                Log study
+              </Link>
+
+            </div>
+
+            <div className="divide-y divide-slate-100">
+
+              {sessions.length === 0 ? (
+                <div className="px-6 py-10 text-center">
+
+                  <p className="font-medium">
+                    No study sessions yet
+                  </p>
+
+                  <p className="mt-1 text-sm text-slate-500">
+                    Start recording your revision.
+                  </p>
+
+                </div>
+              ) : (
+                sessions
+                  .slice(0, 5)
+                  .map((session) => (
+                    <div
+                      key={session.id}
+                      className="flex items-center gap-4 px-6 py-4"
+                    >
+
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                        ◷
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+
+                        <p className="truncate text-sm font-medium">
+                          {session.title}
+                        </p>
+
+                        <p className="mt-1 text-xs text-slate-500">
+                          {new Date(
+                            session.session_date
+                          ).toLocaleDateString(
+                            "en-GB"
+                          )}
+                        </p>
+
+                      </div>
+
+                      <p className="text-sm font-semibold">
+                        {formatDuration(
+                          session.duration_minutes
+                        )}
+                      </p>
+
+                    </div>
+                  ))
+              )}
+
+            </div>
+
+          </section>
+
+        </div>
+
+        {/* Notes */}
+        {exam.notes && (
+          <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+
+            <h2 className="font-semibold">
+              Exam notes
+            </h2>
+
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+              {exam.notes}
+            </p>
+
+          </section>
+        )}
+
+      </div>
+
+    </main>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+
+      <p className="text-sm text-slate-500">
+        {label}
+      </p>
+
+      <p className="mt-2 text-2xl font-bold">
+        {value}
+      </p>
+
+    </div>
+  );
 }
