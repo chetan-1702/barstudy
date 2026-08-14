@@ -15,6 +15,8 @@ import {
   type StudySession,
 } from "../src/services/study-sessions";
 
+const API_URL = "http://localhost:8000";
+
 interface Exam {
   id: number;
   subject_id: number;
@@ -32,13 +34,21 @@ interface Task {
   status?: string;
 }
 
-const API_URL = "http://localhost:8000";
+interface InnProfile {
+  id: number;
+  registered: boolean;
+  inn_name: string | null;
+  membership_status: string | null;
+  application_status: string | null;
+}
 
 export default function Dashboard() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [sessions, setSessions] = useState<StudySession[]>([]);
+  const [innProfile, setInnProfile] =
+    useState<InnProfile | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +67,7 @@ export default function Dashboard() {
         examResponse,
         taskResponse,
         sessionData,
+        innResponse,
       ] = await Promise.all([
         getSubjects(),
 
@@ -69,6 +80,10 @@ export default function Dashboard() {
         }),
 
         getStudySessions(),
+
+        fetch(`${API_URL}/api/inn`, {
+          cache: "no-store",
+        }),
       ]);
 
       if (!examResponse.ok) {
@@ -79,13 +94,19 @@ export default function Dashboard() {
         throw new Error("Failed to load tasks");
       }
 
+      if (!innResponse.ok) {
+        throw new Error("Failed to load Inn profile");
+      }
+
       const examData = await examResponse.json();
       const taskData = await taskResponse.json();
+      const innData = await innResponse.json();
 
       setSubjects(subjectData);
       setExams(examData);
       setTasks(taskData);
       setSessions(sessionData);
+      setInnProfile(innData);
     } catch (err) {
       console.error(err);
       setError("Unable to load dashboard data.");
@@ -220,7 +241,7 @@ export default function Dashboard() {
 
         </header>
 
-        {/* Content */}
+        {/* Main content */}
         <div className="mx-auto max-w-[1200px] p-6 lg:p-10">
 
           {/* Welcome */}
@@ -295,10 +316,63 @@ export default function Dashboard() {
 
           </div>
 
+          {/* Inn status */}
+          <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+
+            <div className="flex items-center justify-between">
+
+              <div className="flex items-center gap-4">
+
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-lg text-indigo-600">
+                  ⚖
+                </div>
+
+                <div>
+
+                  <h2 className="font-semibold">
+                    Inn of Court
+                  </h2>
+
+                  {loading ? (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Loading...
+                    </p>
+                  ) : innProfile?.registered ? (
+                    <p className="mt-1 text-sm text-slate-500">
+                      {innProfile.inn_name ||
+                        "Inn registered"}
+
+                      {innProfile.membership_status
+                        ? ` · ${innProfile.membership_status}`
+                        : ""}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm text-slate-500">
+                      No Inn registration recorded yet
+                    </p>
+                  )}
+
+                </div>
+
+              </div>
+
+              <Link
+                href="/inn"
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                {innProfile?.registered
+                  ? "Manage"
+                  : "Set up"}
+              </Link>
+
+            </div>
+
+          </section>
+
           {/* Main grid */}
           <div className="grid gap-6 lg:grid-cols-3">
 
-            {/* Upcoming Exams */}
+            {/* Upcoming exams */}
             <section className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white shadow-sm">
 
               <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
@@ -399,8 +473,8 @@ export default function Dashboard() {
 
                           <p
                             className={`mt-1 text-xs ${days <= 7
-                                ? "font-semibold text-red-600"
-                                : "text-slate-500"
+                              ? "font-semibold text-red-600"
+                              : "text-slate-500"
                               }`}
                           >
                             {days === 0
@@ -418,9 +492,10 @@ export default function Dashboard() {
                 )}
 
               </div>
+
             </section>
 
-            {/* Quick Actions */}
+            {/* Quick actions */}
             <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 
               <h2 className="font-semibold">
@@ -467,7 +542,7 @@ export default function Dashboard() {
 
           </div>
 
-          {/* Recent Study */}
+          {/* Recent study activity */}
           <section className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
 
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
