@@ -52,3 +52,9 @@ class Subject(Base):
         back_populates="subject",
         cascade="all, delete-orphan",
     )
+
+    resources = relationship(
+        "Resource",
+        back_populates="subject",
+        cascade="all, delete-orphan",
+    )
