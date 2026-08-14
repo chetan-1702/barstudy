@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: barstudy-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: barstudy
+      POSTGRES_USER: barstudy
+      POSTGRES_PASSWORD: barstudy_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - barstudy_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  barstudy_postgres_data:
