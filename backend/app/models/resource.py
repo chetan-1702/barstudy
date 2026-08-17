@@ -18,13 +18,24 @@ class Resource(Base):
         index=True,
     )
 
-    name = Column(String(255), nullable=False)
+    exam_id = Column(
+        Integer,
+        ForeignKey("exams.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
-    resource_type = Column(String(100), nullable=False)
-
-    url = Column(Text, nullable=True)
+    title = Column(String(255), nullable=False)
 
     description = Column(Text, nullable=True)
+
+    file_name = Column(String(255), nullable=False)
+
+    file_path = Column(String(500), nullable=False)
+
+    file_type = Column(String(100), nullable=False)
+
+    file_size = Column(Integer, nullable=False)
 
     created_at = Column(
         DateTime,
@@ -35,4 +46,15 @@ class Resource(Base):
     subject = relationship(
         "Subject",
         back_populates="resources",
+    )
+
+    exam = relationship(
+        "Exam",
+        back_populates="resources",
+    )
+
+    chunks = relationship(
+        "ResourceChunk",
+        back_populates="resource",
+        cascade="all, delete-orphan",
     )

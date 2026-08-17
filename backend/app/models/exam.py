@@ -55,3 +55,9 @@ class Exam(Base):
         "Task",
         back_populates="exam",
     )
+
+    resources = relationship(
+        "Resource",
+        back_populates="exam",
+        cascade="all, delete-orphan",
+    )
