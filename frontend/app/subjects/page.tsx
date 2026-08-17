@@ -10,22 +10,40 @@ import {
     type Subject,
 } from "../../src/services/subjects";
 
+import {
+    getTasks,
+    type Task,
+} from "../../src/services/tasks";
+
 export default function SubjectsPage() {
     const [subjects, setSubjects] = useState<Subject[]>([]);
+    const [tasks, setTasks] = useState<Task[]>([]);
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    const [newSubjectName, setNewSubjectName] = useState("");
+    const [newSubjectCode, setNewSubjectCode] = useState("");
+
     useEffect(() => {
-        loadSubjects();
+        loadData();
     }, []);
 
-    async function loadSubjects() {
+    async function loadData() {
         try {
             setLoading(true);
             setError(null);
 
-            const data = await getSubjects();
-            setSubjects(data);
+            const [subjectsData, tasksData] = await Promise.all([
+                getSubjects(),
+                getTasks(),
+            ]);
+
+            setSubjects(subjectsData);
+            setTasks(tasksData);
         } catch (err) {
             console.error(err);
             setError("Unable to load subjects.");
@@ -34,33 +52,46 @@ export default function SubjectsPage() {
         }
     }
 
-    async function handleAddSubject() {
-        const name = window.prompt("Subject name:");
+    async function handleAddSubject(
+        event: React.FormEvent<HTMLFormElement>
+    ) {
+        event.preventDefault();
 
-        if (!name?.trim()) {
+        if (!newSubjectName.trim()) {
             return;
         }
 
-        const code = window.prompt("Subject code (optional):");
-
         try {
+            setSaving(true);
             setError(null);
 
             const newSubject = await createSubject({
-                name: name.trim(),
-                code: code?.trim() || undefined,
+                name: newSubjectName.trim(),
+                code: newSubjectCode.trim() || undefined,
             });
 
-            setSubjects((current) => [...current, newSubject]);
+            setSubjects((current) => [
+                ...current,
+                newSubject,
+            ]);
+
+            setNewSubjectName("");
+            setNewSubjectCode("");
+            setShowAddModal(false);
         } catch (err) {
             console.error(err);
             setError("Unable to create subject.");
+        } finally {
+            setSaving(false);
         }
     }
 
-    async function handleDeleteSubject(id: number) {
+    async function handleDeleteSubject(
+        id: number,
+        name: string
+    ) {
         const confirmed = window.confirm(
-            "Are you sure you want to delete this subject?"
+            `Are you sure you want to delete "${name}"?\n\nAny tasks associated with this subject will also be removed.`
         );
 
         if (!confirmed) {
@@ -73,12 +104,34 @@ export default function SubjectsPage() {
             await deleteSubject(id);
 
             setSubjects((current) =>
-                current.filter((subject) => subject.id !== id)
+                current.filter(
+                    (subject) => subject.id !== id
+                )
+            );
+
+            setTasks((current) =>
+                current.filter(
+                    (task) => task.subject_id !== id
+                )
             );
         } catch (err) {
             console.error(err);
             setError("Unable to delete subject.");
         }
+    }
+
+    function getTaskCount(subjectId: number) {
+        return tasks.filter(
+            (task) => task.subject_id === subjectId
+        ).length;
+    }
+
+    function getCompletedTaskCount(subjectId: number) {
+        return tasks.filter(
+            (task) =>
+                task.subject_id === subjectId &&
+                task.status.toLowerCase() === "completed"
+        ).length;
     }
 
     return (
@@ -88,7 +141,10 @@ export default function SubjectsPage() {
                 {/* Sidebar */}
                 <aside className="hidden w-64 flex-col bg-[#171b3a] text-white md:flex">
                     <div className="border-b border-white/10 px-6 py-6">
-                        <Link href="/" className="flex items-center gap-3">
+                        <Link
+                            href="/"
+                            className="flex items-center gap-3"
+                        >
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg font-bold text-[#171b3a]">
                                 B
                             </div>
@@ -111,13 +167,48 @@ export default function SubjectsPage() {
                         </p>
 
                         <div className="space-y-1">
-                            <NavItem href="/" label="Dashboard" icon="⌂" />
-                            <NavItem href="/subjects" label="Subjects" icon="▤" active />
-                            <NavItem href="/exams" label="Exams" icon="□" />
-                            <NavItem href="/study" label="Study Planner" icon="◷" />
-                            <NavItem href="/tasks" label="Tasks" icon="✓" />
-                            <NavItem href="/resources" label="Resources" icon="▱" />
-                            <NavItem href="/inn" label="Inn of Court" icon="⚖" />
+                            <NavItem
+                                href="/"
+                                label="Dashboard"
+                                icon="⌂"
+                            />
+
+                            <NavItem
+                                href="/subjects"
+                                label="Subjects"
+                                icon="▤"
+                                active
+                            />
+
+                            <NavItem
+                                href="/exams"
+                                label="Exams"
+                                icon="□"
+                            />
+
+                            <NavItem
+                                href="/study"
+                                label="Study Planner"
+                                icon="◷"
+                            />
+
+                            <NavItem
+                                href="/tasks"
+                                label="Tasks"
+                                icon="✓"
+                            />
+
+                            <NavItem
+                                href="/resources"
+                                label="Resources"
+                                icon="▱"
+                            />
+
+                            <NavItem
+                                href="/inn"
+                                label="Inn of Court"
+                                icon="⚖"
+                            />
                         </div>
                     </nav>
 
@@ -140,11 +231,11 @@ export default function SubjectsPage() {
                     </div>
                 </aside>
 
-                {/* Main content */}
+                {/* Main */}
                 <section className="flex-1">
 
                     {/* Header */}
-                    <header className="flex h-20 items-center justify-between border-b border-slate-200 bg-white px-6 lg:px-10">
+                    <header className="flex min-h-20 items-center justify-between border-b border-slate-200 bg-white px-6 py-4 lg:px-10">
                         <div>
                             <p className="text-sm text-slate-500">
                                 Your course
@@ -156,7 +247,11 @@ export default function SubjectsPage() {
                         </div>
 
                         <button
-                            onClick={handleAddSubject}
+                            onClick={() => {
+                                setNewSubjectName("");
+                                setNewSubjectCode("");
+                                setShowAddModal(true);
+                            }}
                             className="rounded-xl bg-[#171b3a] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#222750]"
                         >
                             + Add subject
@@ -176,8 +271,9 @@ export default function SubjectsPage() {
                             </h1>
 
                             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                                Track your preparation, study time, topics and upcoming
-                                assessments for each subject.
+                                Track your preparation, study time,
+                                tasks and upcoming assessments for
+                                each subject.
                             </p>
                         </div>
 
@@ -192,23 +288,44 @@ export default function SubjectsPage() {
 
                         {/* Summary */}
                         <div className="mb-8 grid gap-4 sm:grid-cols-3">
+
                             <SummaryCard
                                 label="Subjects"
-                                value={loading ? "—" : String(subjects.length)}
+                                value={
+                                    loading
+                                        ? "—"
+                                        : String(subjects.length)
+                                }
                                 detail="Currently enrolled"
                             />
 
                             <SummaryCard
-                                label="Average progress"
-                                value="—"
-                                detail="Available once study tracking is connected"
+                                label="Tasks"
+                                value={
+                                    loading
+                                        ? "—"
+                                        : String(tasks.length)
+                                }
+                                detail="Across all subjects"
                             />
 
                             <SummaryCard
-                                label="Study this week"
-                                value="—"
-                                detail="Available once study sessions are connected"
+                                label="Completed"
+                                value={
+                                    loading
+                                        ? "—"
+                                        : String(
+                                            tasks.filter(
+                                                (task) =>
+                                                    task.status
+                                                        .toLowerCase() ===
+                                                    "completed"
+                                            ).length
+                                        )
+                                }
+                                detail="Completed tasks"
                             />
+
                         </div>
 
                         {/* Loading */}
@@ -220,124 +337,196 @@ export default function SubjectsPage() {
                             </div>
                         )}
 
-                        {/* Empty state */}
-                        {!loading && subjects.length === 0 && (
-                            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-                                <h2 className="font-semibold text-slate-800">
-                                    No subjects yet
-                                </h2>
+                        {/* Empty */}
+                        {!loading &&
+                            subjects.length === 0 && (
+                                <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
 
-                                <p className="mt-2 text-sm text-slate-500">
-                                    Add your first Bar course subject to get started.
-                                </p>
+                                    <h2 className="font-semibold text-slate-800">
+                                        No subjects yet
+                                    </h2>
 
-                                <button
-                                    onClick={handleAddSubject}
-                                    className="mt-5 rounded-xl bg-[#171b3a] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#222750]"
-                                >
-                                    + Add subject
-                                </button>
-                            </div>
-                        )}
+                                    <p className="mt-2 text-sm text-slate-500">
+                                        Add your first Bar course
+                                        subject to get started.
+                                    </p>
+
+                                    <button
+                                        onClick={() =>
+                                            setShowAddModal(true)
+                                        }
+                                        className="mt-5 rounded-xl bg-[#171b3a] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#222750]"
+                                    >
+                                        + Add subject
+                                    </button>
+
+                                </div>
+                            )}
 
                         {/* Subject cards */}
-                        {!loading && subjects.length > 0 && (
-                            <div className="grid gap-5 lg:grid-cols-2">
-                                {subjects.map((subject) => (
-                                    <article
-                                        key={subject.id}
-                                        className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-slate-300 hover:shadow-md"
-                                    >
-                                        {/* Subject header */}
-                                        <div className="flex items-start justify-between gap-4">
+                        {!loading &&
+                            subjects.length > 0 && (
+                                <div className="grid gap-5 lg:grid-cols-2">
 
-                                            <div className="flex items-center gap-4">
-                                                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-sm font-bold text-indigo-600">
-                                                    {subject.code || "LAW"}
-                                                </div>
+                                    {subjects.map((subject) => {
+                                        const taskCount =
+                                            getTaskCount(
+                                                subject.id
+                                            );
 
-                                                <div>
-                                                    <h2 className="font-semibold">
-                                                        {subject.name}
-                                                    </h2>
+                                        const completedCount =
+                                            getCompletedTaskCount(
+                                                subject.id
+                                            );
 
-                                                    <p className="mt-1 text-xs text-slate-500">
-                                                        Exam: Not set yet
-                                                    </p>
-                                                </div>
-                                            </div>
+                                        const progress =
+                                            taskCount > 0
+                                                ? Math.round(
+                                                    (completedCount /
+                                                        taskCount) *
+                                                    100
+                                                )
+                                                : 0;
 
-                                            <div className="text-right">
-                                                <p className="text-xl font-bold">
-                                                    —
-                                                </p>
-
-                                                <p className="text-xs text-slate-400">
-                                                    progress
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        {/* Progress */}
-                                        <div className="mt-5">
-                                            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                                                <div
-                                                    className="h-full rounded-full bg-indigo-500"
-                                                    style={{ width: "0%" }}
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {/* Details */}
-                                        <div className="mt-6 grid grid-cols-3 gap-3">
-                                            <Detail
-                                                label="Exam"
-                                                value="Not set"
-                                            />
-
-                                            <Detail
-                                                label="Study"
-                                                value="0h"
-                                            />
-
-                                            <Detail
-                                                label="Topics"
-                                                value="—"
-                                            />
-                                        </div>
-
-                                        {/* Footer */}
-                                        <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-5">
-                                            <p className="text-xs text-slate-400">
-                                                No tasks yet
-                                            </p>
-
-                                            <button
-                                                onClick={() =>
-                                                    handleDeleteSubject(subject.id)
-                                                }
-                                                className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-red-50 hover:text-red-600"
+                                        return (
+                                            <Link
+                                                key={subject.id}
+                                                href={`/subjects/${subject.id}`}
+                                                className="group block"
                                             >
-                                                Delete
-                                            </button>
-                                        </div>
-                                    </article>
-                                ))}
-                            </div>
-                        )}
+                                                <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition group-hover:border-indigo-200 group-hover:shadow-md">
 
-                        {/* Future import */}
+                                                    {/* Header */}
+                                                    <div className="flex items-start justify-between gap-4">
+
+                                                        <div className="flex items-center gap-4">
+
+                                                            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-sm font-bold text-indigo-600">
+                                                                {subject.code ||
+                                                                    "LAW"}
+                                                            </div>
+
+                                                            <div>
+                                                                <h2 className="font-semibold text-slate-900 group-hover:text-indigo-600">
+                                                                    {
+                                                                        subject.name
+                                                                    }
+                                                                </h2>
+
+                                                                <p className="mt-1 text-xs text-slate-500">
+                                                                    Click to view subject
+                                                                </p>
+                                                            </div>
+
+                                                        </div>
+
+                                                        <div className="text-right">
+                                                            <p className="text-xl font-bold">
+                                                                {progress}%
+                                                            </p>
+
+                                                            <p className="text-xs text-slate-400">
+                                                                progress
+                                                            </p>
+                                                        </div>
+
+                                                    </div>
+
+                                                    {/* Progress */}
+                                                    <div className="mt-5">
+                                                        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                                                            <div
+                                                                className="h-full rounded-full bg-indigo-500 transition-all"
+                                                                style={{
+                                                                    width: `${progress}%`,
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Details */}
+                                                    <div className="mt-6 grid grid-cols-3 gap-3">
+
+                                                        <Detail
+                                                            label="Exam"
+                                                            value="Not set"
+                                                        />
+
+                                                        <Detail
+                                                            label="Tasks"
+                                                            value={String(
+                                                                taskCount
+                                                            )}
+                                                        />
+
+                                                        <Detail
+                                                            label="Completed"
+                                                            value={`${completedCount}`}
+                                                        />
+
+                                                    </div>
+
+                                                    {/* Footer */}
+                                                    <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-5">
+
+                                                        <p className="text-xs text-slate-400">
+                                                            {taskCount ===
+                                                                0
+                                                                ? "No tasks yet"
+                                                                : `${taskCount} task${taskCount ===
+                                                                    1
+                                                                    ? ""
+                                                                    : "s"
+                                                                } associated`}
+                                                        </p>
+
+                                                        <div className="flex items-center gap-2">
+
+                                                            <span className="text-xs font-medium text-indigo-600">
+                                                                View subject →
+                                                            </span>
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={(event) => {
+                                                                    event.preventDefault();
+                                                                    event.stopPropagation();
+
+                                                                    handleDeleteSubject(
+                                                                        subject.id,
+                                                                        subject.name
+                                                                    );
+                                                                }}
+                                                                className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-red-50 hover:text-red-600"
+                                                            >
+                                                                Delete
+                                                            </button>
+
+                                                        </div>
+
+                                                    </div>
+
+                                                </article>
+                                            </Link>
+                                        );
+                                    })}
+
+                                </div>
+                            )}
+
+                        {/* Future timetable */}
                         <section className="mt-8 rounded-2xl border border-dashed border-slate-300 bg-white p-6">
                             <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+
                                 <div>
                                     <h2 className="font-semibold">
                                         Import your timetable
                                     </h2>
 
                                     <p className="mt-1 max-w-xl text-sm text-slate-500">
-                                        Later, you&apos;ll be able to import your course timetable
-                                        and automatically populate your subjects and study
-                                        schedule.
+                                        Later, you&apos;ll be able to import
+                                        your course timetable and automatically
+                                        populate your subjects and study schedule.
                                     </p>
                                 </div>
 
@@ -347,12 +536,126 @@ export default function SubjectsPage() {
                                 >
                                     Coming later
                                 </button>
+
                             </div>
                         </section>
 
                     </div>
                 </section>
             </div>
+
+            {/* Add Subject Modal */}
+            {showAddModal && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-sm"
+                    onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) {
+                            setShowAddModal(false);
+                        }
+                    }}
+                >
+                    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+
+                        <div className="flex items-start justify-between">
+
+                            <div>
+                                <h2 className="text-lg font-semibold text-slate-900">
+                                    Add subject
+                                </h2>
+
+                                <p className="mt-1 text-sm text-slate-500">
+                                    Add a subject to your Bar course workspace.
+                                </p>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setShowAddModal(false)
+                                }
+                                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                            >
+                                ✕
+                            </button>
+
+                        </div>
+
+                        <form
+                            onSubmit={handleAddSubject}
+                            className="mt-6 space-y-5"
+                        >
+
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-700">
+                                    Subject name
+                                </label>
+
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    value={newSubjectName}
+                                    onChange={(event) =>
+                                        setNewSubjectName(
+                                            event.target.value
+                                        )
+                                    }
+                                    placeholder="e.g. Criminal Law"
+                                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-700">
+                                    Subject code
+                                    <span className="ml-1 font-normal text-slate-400">
+                                        (optional)
+                                    </span>
+                                </label>
+
+                                <input
+                                    type="text"
+                                    value={newSubjectCode}
+                                    onChange={(event) =>
+                                        setNewSubjectCode(
+                                            event.target.value
+                                        )
+                                    }
+                                    placeholder="e.g. CRIM"
+                                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-3 border-t border-slate-100 pt-5">
+
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setShowAddModal(false)
+                                    }
+                                    className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                >
+                                    Cancel
+                                </button>
+
+                                <button
+                                    type="submit"
+                                    disabled={
+                                        saving ||
+                                        !newSubjectName.trim()
+                                    }
+                                    className="rounded-xl bg-[#171b3a] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#222750] disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {saving
+                                        ? "Adding..."
+                                        : "Add subject"}
+                                </button>
+
+                            </div>
+
+                        </form>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }
