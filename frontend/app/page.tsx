@@ -15,7 +15,7 @@ import {
   type StudySession,
 } from "../src/services/study-sessions";
 
-const API_URL = "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 interface Exam {
   id: number;

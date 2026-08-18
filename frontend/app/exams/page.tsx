@@ -18,7 +18,7 @@ interface Subject {
   name: string;
 }
 
-const API_URL = "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function ExamsPage() {
   const [exams, setExams] = useState<Exam[]>([]);

@@ -27,7 +27,7 @@ interface Exam {
   exam_date: string;
 }
 
-const API_URL = "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function ResourcesPage() {
   const [resources, setResources] = useState<Resource[]>([]);

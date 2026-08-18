@@ -17,7 +17,10 @@ router = APIRouter(
 )
 
 
-UPLOAD_DIR = "backend/app/uploads"
+UPLOAD_DIR = os.getenv(
+    "UPLOAD_DIR",
+    "/app/data/uploads",
+)
 
 ALLOWED_TYPES = {
     "application/pdf",
