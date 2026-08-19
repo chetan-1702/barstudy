@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL =
+    process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 interface Subject {
     id: number;
@@ -33,7 +34,7 @@ interface Task {
     created_at: string;
 }
 
-export default function TasksPage() {
+function TasksPageContent() {
     const searchParams = useSearchParams();
 
     const subjectFromUrl = searchParams.get("subject");
@@ -187,7 +188,6 @@ export default function TasksPage() {
             setDescription("");
             setDueDate("");
             setPriority("Medium");
-
             setSuccess("Task created successfully.");
         } catch (err) {
             console.error(err);
@@ -334,17 +334,21 @@ export default function TasksPage() {
                 {/* Messages */}
                 {error && (
                     <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+
                         <p className="text-sm text-red-600">
                             {error}
                         </p>
+
                     </div>
                 )}
 
                 {success && (
                     <div className="mb-5 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+
                         <p className="text-sm text-green-700">
                             {success}
                         </p>
+
                     </div>
                 )}
 
@@ -389,6 +393,7 @@ export default function TasksPage() {
                                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-500"
                                     required
                                 >
+
                                     <option value="">
                                         Select subject
                                     </option>
@@ -401,6 +406,7 @@ export default function TasksPage() {
                                             {subject.name}
                                         </option>
                                     ))}
+
                                 </select>
 
                             </div>
@@ -422,6 +428,7 @@ export default function TasksPage() {
                                     disabled={!selectedSubject}
                                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 focus:border-indigo-500"
                                 >
+
                                     <option value="">
                                         No specific exam
                                     </option>
@@ -434,6 +441,7 @@ export default function TasksPage() {
                                             {exam.name}
                                         </option>
                                     ))}
+
                                 </select>
 
                                 <p className="mt-1.5 text-xs text-slate-400">
@@ -520,6 +528,7 @@ export default function TasksPage() {
                                     }
                                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-indigo-500"
                                 >
+
                                     <option value="Low">
                                         Low
                                     </option>
@@ -531,6 +540,7 @@ export default function TasksPage() {
                                     <option value="High">
                                         High
                                     </option>
+
                                 </select>
 
                             </div>
@@ -617,7 +627,6 @@ export default function TasksPage() {
                             <div className="divide-y divide-slate-100">
 
                                 {visibleTasks.map((task) => {
-
                                     const completed =
                                         task.status.toLowerCase() ===
                                         "completed";
@@ -643,11 +652,13 @@ export default function TasksPage() {
                                                         : "Mark as completed"
                                                 }
                                             >
+
                                                 {completed && (
                                                     <span className="text-xs">
                                                         ✓
                                                     </span>
                                                 )}
+
                                             </button>
 
                                             <div className="min-w-0 flex-1">
@@ -720,5 +731,21 @@ export default function TasksPage() {
             </div>
 
         </main>
+    );
+}
+
+export default function TasksPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="flex min-h-screen items-center justify-center">
+                    <p className="text-sm text-slate-500">
+                        Loading tasks...
+                    </p>
+                </div>
+            }
+        >
+            <TasksPageContent />
+        </Suspense>
     );
 }
