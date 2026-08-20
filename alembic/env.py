@@ -4,6 +4,8 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
+from alembic import context
+
 from backend.app.db.database import Base
 from backend.app.models import (
     User,
@@ -16,8 +18,13 @@ from backend.app.models import (
     InnProfile,
 )
 
+
+# Alembic Config object
 config = context.config
 
+
+# Use Railway's DATABASE_URL when available.
+# Otherwise fall back to the URL in alembic.ini for local development.
 database_url = os.getenv("DATABASE_URL")
 
 if database_url:
@@ -26,23 +33,20 @@ if database_url:
         database_url,
     )
 
+
+# Configure Python logging
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+
+# SQLAlchemy metadata
 target_metadata = Base.metadata
 
 
-def get_database_url() -> str:
-    return os.getenv(
-        "DATABASE_URL",
-        config.get_main_option("sqlalchemy.url"),
-    )
-
-
 def run_migrations_offline() -> None:
-    """Run migrations in offline mode."""
+    """Run migrations in 'offline' mode."""
 
-    url = get_database_url()
+    url = config.get_main_option("sqlalchemy.url")
 
     context.configure(
         url=url,
@@ -60,12 +64,11 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in online mode."""
+    """Run migrations in 'online' mode."""
 
-    database_url = get_database_url()
-
-    connectable = create_engine(
-        database_url,
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 
