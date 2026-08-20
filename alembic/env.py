@@ -1,5 +1,5 @@
-import os
 from logging.config import fileConfig
+import os
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -7,36 +7,24 @@ from sqlalchemy import pool
 from alembic import context
 
 from backend.app.db.database import Base
-from backend.app.models import (
-    User,
-    Subject,
-    Exam,
-    Task,
-    Resource,
-    ResourceChunk,
-    StudySession,
-    InnProfile,
-)
+from backend.app.models import User, Subject, Exam, Task, Resource
 
 
 # Alembic Config object
 config = context.config
 
 
-# Use Railway's DATABASE_URL when available.
-# Otherwise fall back to the URL in alembic.ini for local development.
-database_url = os.getenv("DATABASE_URL")
-
-if database_url:
-    config.set_main_option(
-        "sqlalchemy.url",
-        database_url,
-    )
-
-
 # Configure Python logging
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+
+# Use Railway's DATABASE_URL when deployed.
+# Fall back to alembic.ini for local development.
+database_url = os.getenv("DATABASE_URL")
+
+if database_url:
+    config.set_main_option("sqlalchemy.url", database_url)
 
 
 # SQLAlchemy metadata
